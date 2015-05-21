@@ -1,0 +1,10 @@
+{
+	"ImportPath": "github.com/simon3z/docker-fleece",
+	"GoVersion": "go1.4.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/fsouza/go-dockerclient",
+			"Rev": "7c16714cf98ad1ca6ef58ab0c5e161690bb49279"
+		}
+	]
+}

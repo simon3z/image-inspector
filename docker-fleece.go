@@ -1,0 +1,144 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"math"
+	"math/big"
+	"os"
+	"path"
+	"strings"
+
+	"archive/tar"
+	"crypto/rand"
+
+	"github.com/fsouza/go-dockerclient"
+)
+
+const (
+	DOCKER_TAR_PREFIX = "rootfs/"
+	OWNER_PERM_RW     = 0600
+)
+
+func handleTarStream(reader io.ReadCloser, destination string) {
+	tr := tar.NewReader(reader)
+	if tr != nil {
+		err := processTarStream(tr, destination)
+		if err != nil {
+			log.Print(err)
+		}
+	} else {
+		log.Printf("Unable to create image tar reader")
+	}
+	reader.Close()
+}
+
+func processTarStream(tr *tar.Reader, destination string) error {
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("Unable to extract container: %v\n", err)
+		}
+
+		hdrInfo := hdr.FileInfo()
+
+		path := path.Join(destination, strings.TrimPrefix(hdr.Name, DOCKER_TAR_PREFIX))
+		// Overriding permissions to allow writing content
+		mode := hdrInfo.Mode() | OWNER_PERM_RW
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err := os.Mkdir(path, mode); err != nil {
+				if !os.IsExist(err) {
+					return fmt.Errorf("Unable to create directory: %v", err)
+				}
+				err = os.Chmod(path, mode)
+				if err != nil {
+					return fmt.Errorf("Unable to update directory mode: %v", err)
+				}
+			}
+		case tar.TypeReg, tar.TypeRegA:
+			file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+			if err != nil {
+				return fmt.Errorf("Unable to create file: %v", err)
+			}
+			if _, err := io.Copy(file, tr); err != nil {
+				file.Close()
+				return fmt.Errorf("Unable to write into file: %v", err)
+			}
+			file.Close()
+		default:
+			// For now we're skipping anything else. Special device files and
+			// symlinks are not needed or anyway probably incorrect.
+		}
+	}
+}
+
+func generateRandomName() string {
+	n, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
+	if err != nil {
+		log.Fatalf("Unable to generate random container name: %v\n", err)
+	}
+	return fmt.Sprintf("docker-fleece-%016x", n)
+}
+
+func main() {
+	uri := flag.String("docker", "unix:///var/run/docker.sock", "Daemon socket to connect to")
+	image := flag.String("image", "", "Docker image to fleece")
+	path := flag.String("path", "", "Destination path for the image files")
+
+	flag.Parse()
+
+	if *uri == "" {
+		log.Fatalf("Docker socket connection must be specified")
+	}
+	if *image == "" {
+		log.Fatalf("Docker image to fleece must be specified")
+	}
+	if *path == "" {
+		log.Fatalf("Destination path for image files must be specified")
+	}
+
+	client, err := docker.NewClient(*uri)
+	if err != nil {
+		log.Fatalf("Unable to connect to docker daemon: %v\n", err)
+	}
+
+	// For security purpose we don't define any entrypoint and command
+	container, err := client.CreateContainer(docker.CreateContainerOptions{
+		Name: generateRandomName(),
+		Config: &docker.Config{
+			Image:      *image,
+			Entrypoint: []string{""},
+			Cmd:        []string{""},
+		},
+	})
+	if err != nil {
+		log.Fatalf("Unable to create docker container: %v\n", err)
+	}
+
+	err = os.Mkdir(*path, 0755)
+	if err != nil {
+		if !os.IsExist(err) {
+			log.Fatalf("Unable to create destination path: %v\n", err)
+		}
+	}
+
+	reader, writer := io.Pipe()
+	go handleTarStream(reader, *path)
+
+	_ = client.CopyFromContainer(docker.CopyFromContainerOptions{
+		Container:    container.ID,
+		OutputStream: writer,
+		Resource:     "/",
+	})
+
+	_ = client.RemoveContainer(docker.RemoveContainerOptions{
+		ID: container.ID,
+	})
+}
