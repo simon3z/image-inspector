@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"math/big"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"archive/tar"
 	"crypto/rand"
 
+	"golang.org/x/net/webdav"
 	"github.com/fsouza/go-dockerclient"
 )
 
@@ -91,6 +93,7 @@ func main() {
 	uri := flag.String("docker", "unix:///var/run/docker.sock", "Daemon socket to connect to")
 	image := flag.String("image", "", "Docker image to fleece")
 	path := flag.String("path", "", "Destination path for the image files")
+	serve := flag.String("serve", "", "Host and port where to serve the image with webdav")
 
 	flag.Parse()
 
@@ -147,4 +150,19 @@ func main() {
 	_ = client.RemoveContainer(docker.RemoveContainerOptions{
 		ID: container.ID,
 	})
+
+	if serve != nil && *serve != "" {
+		log.Printf("Serving image content %s on webdav://%s", *path, *serve)
+
+		h := &webdav.Handler{
+			FileSystem: webdav.Dir(*path),
+			LockSystem: webdav.NewMemLS(),
+		}
+
+		http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r)
+		}))
+
+		log.Fatal(http.ListenAndServe(*serve, nil))
+	}
 }

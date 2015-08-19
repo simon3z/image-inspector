@@ -5,6 +5,10 @@
 		{
 			"ImportPath": "github.com/fsouza/go-dockerclient",
 			"Rev": "7c16714cf98ad1ca6ef58ab0c5e161690bb49279"
+		},
+		{
+			"ImportPath": "golang.org/x/net/webdav",
+			"Rev": "66f0418ca41253f8d1a024eb9754e9441a8e79b9"
 		}
 	]
 }
