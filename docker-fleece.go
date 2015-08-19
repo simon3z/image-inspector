@@ -109,6 +109,12 @@ func main() {
 		log.Fatalf("Unable to connect to docker daemon: %v\n", err)
 	}
 
+	imagePullOption := docker.PullImageOptions{Repository: *image}
+	imagePullAuth := docker.AuthConfiguration{} // TODO: support authentication
+	if err := client.PullImage(imagePullOption, imagePullAuth); err != nil {
+		log.Fatalf("Unable to pull docker image: %v\n", err)
+	}
+
 	// For security purpose we don't define any entrypoint and command
 	container, err := client.CreateContainer(docker.CreateContainerOptions{
 		Name: generateRandomName(),
