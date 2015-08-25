@@ -22,6 +22,8 @@ import (
 const (
 	DOCKER_TAR_PREFIX = "rootfs/"
 	OWNER_PERM_RW     = 0600
+	VERSION_PREFIX    = "/v1"
+	CONTENT_PREFIX    = VERSION_PREFIX + "/content/"
 )
 
 func handleTarStream(reader io.ReadCloser, destination string) {
@@ -154,15 +156,11 @@ func main() {
 	})
 
 	if serve != nil && *serve != "" {
-		log.Printf("Serving image content %s on webdav://%s", *path, *serve)
+		log.Printf("Serving image content %s on webdav://%s%s", *path, *serve, CONTENT_PREFIX)
 
-		h := &webdav.Handler{
+		http.Handle(CONTENT_PREFIX, webdav.StripPrefix(CONTENT_PREFIX, &webdav.Handler{
 			FileSystem: webdav.Dir(*path),
 			LockSystem: webdav.NewMemLS(),
-		}
-
-		http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.ServeHTTP(w, r)
 		}))
 
 		log.Fatal(http.ListenAndServe(*serve, nil))
