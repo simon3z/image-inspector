@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fleece-fedora-latest
+  labels:
+    name: fleece-fedora-latest
+spec:
+  containers:
+  - name: docker-fleece
+    image: docker.io/fsimonce/docker-fleece:latest
+    command:
+    - /usr/bin/docker-fleece
+    - --image=docker.io/fedora:latest
+    - --path=/var/tmp/image-content
+    - --serve=0.0.0.0:8080
+    ports:
+    - containerPort: 8080
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - mountPath: /var/run/docker.sock
+      name: docker-socket
+  volumes:
+  - hostPath:
+      path: /var/run/docker.sock
+    name: docker-socket
