@@ -112,6 +112,7 @@ func main() {
 		log.Fatalf("Unable to connect to docker daemon: %v\n", err)
 	}
 
+	log.Printf("Pulling image %s", *image)
 	imagePullOption := docker.PullImageOptions{Repository: *image}
 	imagePullAuth := docker.AuthConfiguration{} // TODO: support authentication
 	if err := client.PullImage(imagePullOption, imagePullAuth); err != nil {
@@ -141,6 +142,7 @@ func main() {
 	reader, writer := io.Pipe()
 	go handleTarStream(reader, *path)
 
+	log.Printf("Extracting image %s to %s", *image, *path)
 	_ = client.CopyFromContainer(docker.CopyFromContainerOptions{
 		Container:    container.ID,
 		OutputStream: writer,
