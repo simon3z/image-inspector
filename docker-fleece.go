@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -15,15 +16,16 @@ import (
 	"archive/tar"
 	"crypto/rand"
 
-	"golang.org/x/net/webdav"
 	"github.com/fsouza/go-dockerclient"
+	"golang.org/x/net/webdav"
 )
 
 const (
-	DOCKER_TAR_PREFIX = "rootfs/"
-	OWNER_PERM_RW     = 0600
-	VERSION_PREFIX    = "/v1"
-	CONTENT_PREFIX    = VERSION_PREFIX + "/content/"
+	DOCKER_TAR_PREFIX  = "rootfs/"
+	OWNER_PERM_RW      = 0600
+	VERSION_PREFIX     = "/v1"
+	CONTENT_URL_PREFIX = VERSION_PREFIX + "/content/"
+	METADATA_URL_PATH  = VERSION_PREFIX + "/metadata"
 )
 
 func handleTarStream(reader io.ReadCloser, destination string) {
@@ -134,6 +136,16 @@ func main() {
 		log.Fatalf("Unable to create docker container: %v\n", err)
 	}
 
+	containerMetadata, err := client.InspectContainer(container.ID)
+	if err != nil {
+		log.Fatalf("Unable to get docker container information: %v\n", err)
+	}
+
+	imageMetadata, err := client.InspectImage(containerMetadata.Image)
+	if err != nil {
+		log.Fatalf("Unable to get docker image information: %v\n", err)
+	}
+
 	err = os.Mkdir(*path, 0755)
 	if err != nil {
 		if !os.IsExist(err) {
@@ -156,12 +168,21 @@ func main() {
 	})
 
 	if serve != nil && *serve != "" {
-		log.Printf("Serving image content %s on webdav://%s%s", *path, *serve, CONTENT_PREFIX)
+		log.Printf("Serving image content %s on webdav://%s%s", *path, *serve, CONTENT_URL_PREFIX)
 
-		http.Handle(CONTENT_PREFIX, webdav.StripPrefix(CONTENT_PREFIX, &webdav.Handler{
+		http.Handle(CONTENT_URL_PREFIX, webdav.StripPrefix(CONTENT_URL_PREFIX, &webdav.Handler{
 			FileSystem: webdav.Dir(*path),
 			LockSystem: webdav.NewMemLS(),
 		}))
+
+		http.HandleFunc(METADATA_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
+			body, err := json.Marshal(imageMetadata)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write(body)
+		})
 
 		log.Fatal(http.ListenAndServe(*serve, nil))
 	}
