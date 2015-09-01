@@ -3,13 +3,13 @@ MAINTAINER Federico Simoncelli <fsimonce@redhat.com>
 
 RUN yum install -y golang git && yum clean all
 
-WORKDIR /go/src/github.com/simon3z/docker-fleece
-ADD .   /go/src/github.com/simon3z/docker-fleece
+WORKDIR /go/src/github.com/simon3z/image-inspector
+ADD .   /go/src/github.com/simon3z/image-inspector
 ENV GOPATH /go
 ENV PATH $PATH:$GOROOT/bin:$GOPATH/bin
 
-RUN go get github.com/simon3z/docker-fleece && \
+RUN go get github.com/simon3z/image-inspector && \
     go build && \
-    mv ./docker-fleece /usr/bin/
+    mv ./image-inspector /usr/bin/
 
-ENTRYPOINT ["/usr/bin/docker-fleece"]
+ENTRYPOINT ["/usr/bin/image-inspector"]

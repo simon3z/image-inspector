@@ -90,12 +90,12 @@ func generateRandomName() string {
 	if err != nil {
 		log.Fatalf("Unable to generate random container name: %v\n", err)
 	}
-	return fmt.Sprintf("docker-fleece-%016x", n)
+	return fmt.Sprintf("image-inspector-%016x", n)
 }
 
 func main() {
 	uri := flag.String("docker", "unix:///var/run/docker.sock", "Daemon socket to connect to")
-	image := flag.String("image", "", "Docker image to fleece")
+	image := flag.String("image", "", "Docker image to inspect")
 	path := flag.String("path", "", "Destination path for the image files")
 	serve := flag.String("serve", "", "Host and port where to serve the image with webdav")
 
@@ -105,7 +105,7 @@ func main() {
 		log.Fatalf("Docker socket connection must be specified")
 	}
 	if *image == "" {
-		log.Fatalf("Docker image to fleece must be specified")
+		log.Fatalf("Docker image to inspect must be specified")
 	}
 	if *path == "" {
 		log.Fatalf("Destination path for image files must be specified")
