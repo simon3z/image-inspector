@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math"
 	"math/big"
@@ -107,9 +108,6 @@ func main() {
 	if *image == "" {
 		log.Fatalf("Docker image to inspect must be specified")
 	}
-	if *path == "" {
-		log.Fatalf("Destination path for image files must be specified")
-	}
 
 	client, err := docker.NewClient(*uri)
 	if err != nil {
@@ -146,10 +144,18 @@ func main() {
 		log.Fatalf("Unable to get docker image information: %v\n", err)
 	}
 
-	err = os.Mkdir(*path, 0755)
-	if err != nil {
-		if !os.IsExist(err) {
-			log.Fatalf("Unable to create destination path: %v\n", err)
+	if path != nil && *path != "" {
+		err = os.Mkdir(*path, 0755)
+		if err != nil {
+			if !os.IsExist(err) {
+				log.Fatalf("Unable to create destination path: %v\n", err)
+			}
+		}
+	} else {
+		// forcing to use /var/tmp because often it's not an in-memory tmpfs
+		*path, err = ioutil.TempDir("/var/tmp", "image-inspector-")
+		if err != nil {
+			log.Fatalf("Unable to create temporary path: %v\n", err)
 		}
 	}
 
