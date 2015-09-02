@@ -22,11 +22,11 @@ import (
 )
 
 const (
+	VERSION_TAG        = "v1"
 	DOCKER_TAR_PREFIX  = "rootfs/"
 	OWNER_PERM_RW      = 0600
-	VERSION_PREFIX     = "/v1"
-	CONTENT_URL_PREFIX = VERSION_PREFIX + "/content/"
-	METADATA_URL_PATH  = VERSION_PREFIX + "/metadata"
+	CONTENT_URL_PREFIX = "/api/" + VERSION_TAG + "/content/"
+	METADATA_URL_PATH  = "/api/" + VERSION_TAG + "/metadata"
 )
 
 func handleTarStream(reader io.ReadCloser, destination string) {
