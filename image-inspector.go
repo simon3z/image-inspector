@@ -25,6 +25,7 @@ const (
 	VERSION_TAG        = "v1"
 	DOCKER_TAR_PREFIX  = "rootfs/"
 	OWNER_PERM_RW      = 0600
+	HEALTHZ_URL_PATH   = "/healthz"
 	CONTENT_URL_PREFIX = "/api/" + VERSION_TAG + "/content/"
 	METADATA_URL_PATH  = "/api/" + VERSION_TAG + "/metadata"
 )
@@ -181,9 +182,13 @@ func main() {
 		log.Printf("Serving image content %s on webdav://%s%s", *path, *serve, CONTENT_URL_PREFIX)
 
 		http.Handle(CONTENT_URL_PREFIX, &webdav.Handler{
-			Prefix: CONTENT_URL_PREFIX,
+			Prefix:     CONTENT_URL_PREFIX,
 			FileSystem: webdav.Dir(*path),
 			LockSystem: webdav.NewMemLS(),
+		})
+
+		http.HandleFunc(HEALTHZ_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("ok\n"))
 		})
 
 		http.HandleFunc(METADATA_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
