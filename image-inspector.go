@@ -180,10 +180,11 @@ func main() {
 	if serve != nil && *serve != "" {
 		log.Printf("Serving image content %s on webdav://%s%s", *path, *serve, CONTENT_URL_PREFIX)
 
-		http.Handle(CONTENT_URL_PREFIX, webdav.StripPrefix(CONTENT_URL_PREFIX, &webdav.Handler{
+		http.Handle(CONTENT_URL_PREFIX, &webdav.Handler{
+			Prefix: CONTENT_URL_PREFIX,
 			FileSystem: webdav.Dir(*path),
 			LockSystem: webdav.NewMemLS(),
-		}))
+		})
 
 		http.HandleFunc(METADATA_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
 			body, err := json.Marshal(imageMetadata)

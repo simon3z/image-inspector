@@ -8,7 +8,7 @@
 		},
 		{
 			"ImportPath": "golang.org/x/net/webdav",
-			"Rev": "66f0418ca41253f8d1a024eb9754e9441a8e79b9"
+			"Rev": "db8e4de5b2d6653f66aea53094624468caad15d2"
 		}
 	]
 }
