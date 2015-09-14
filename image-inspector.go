@@ -21,13 +21,18 @@ import (
 	"golang.org/x/net/webdav"
 )
 
+type APIVersions struct {
+	Versions []string `json:"versions"`
+}
+
 const (
 	VERSION_TAG        = "v1"
 	DOCKER_TAR_PREFIX  = "rootfs/"
 	OWNER_PERM_RW      = 0600
 	HEALTHZ_URL_PATH   = "/healthz"
-	CONTENT_URL_PREFIX = "/api/" + VERSION_TAG + "/content/"
-	METADATA_URL_PATH  = "/api/" + VERSION_TAG + "/metadata"
+	API_URL_PREFIX     = "/api"
+	CONTENT_URL_PREFIX = API_URL_PREFIX + "/" + VERSION_TAG + "/content/"
+	METADATA_URL_PATH  = API_URL_PREFIX + "/" + VERSION_TAG + "/metadata"
 )
 
 func handleTarStream(reader io.ReadCloser, destination string) {
@@ -178,11 +183,22 @@ func main() {
 		ID: container.ID,
 	})
 
+	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
+
 	if serve != nil && *serve != "" {
 		log.Printf("Serving image content %s on webdav://%s%s", *path, *serve, CONTENT_URL_PREFIX)
 
 		http.HandleFunc(HEALTHZ_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("ok\n"))
+		})
+
+		http.HandleFunc(API_URL_PREFIX, func(w http.ResponseWriter, r *http.Request) {
+			body, err := json.MarshalIndent(supportedVersions, "", "  ")
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write(body)
 		})
 
 		http.HandleFunc(METADATA_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
