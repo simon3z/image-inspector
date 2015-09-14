@@ -89,6 +89,9 @@ func processTarStream(tr *tar.Reader, destination string) error {
 			// For now we're skipping anything else. Special device files and
 			// symlinks are not needed or anyway probably incorrect.
 		}
+
+		// maintaining access and modification time in best effort fashion
+		os.Chtimes(path, hdr.AccessTime, hdr.ModTime)
 	}
 }
 
