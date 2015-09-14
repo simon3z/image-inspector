@@ -186,7 +186,7 @@ func main() {
 		})
 
 		http.HandleFunc(METADATA_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
-			body, err := json.Marshal(imageMetadata)
+			body, err := json.MarshalIndent(imageMetadata, "", "  ")
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
