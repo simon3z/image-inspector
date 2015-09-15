@@ -173,11 +173,14 @@ func main() {
 	go handleTarStream(reader, *path)
 
 	log.Printf("Extracting image %s to %s", *image, *path)
-	_ = client.CopyFromContainer(docker.CopyFromContainerOptions{
+	err = client.CopyFromContainer(docker.CopyFromContainerOptions{
 		Container:    container.ID,
 		OutputStream: writer,
 		Resource:     "/",
 	})
+	if err != nil {
+		log.Fatalf("Unable to extract container: %v\n", err)
+	}
 
 	_ = client.RemoveContainer(docker.RemoveContainerOptions{
 		ID: container.ID,
