@@ -4,7 +4,7 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/fsouza/go-dockerclient",
-			"Rev": "7c16714cf98ad1ca6ef58ab0c5e161690bb49279"
+			"Rev": "c9ad0ce23f68428421adfc6ced9e6123f54788a5"
 		},
 		{
 			"ImportPath": "golang.org/x/net/webdav",
