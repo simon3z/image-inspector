@@ -7,7 +7,7 @@ metadata:
 spec:
   containers:
   - name: image-inspector
-    image: docker.io/fsimonce/image-inspector:latest
+    image: docker.io/openshift/image-inspector:latest
     command:
     - /usr/bin/image-inspector
     - --image=docker.io/fedora:latest
