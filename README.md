@@ -8,4 +8,4 @@ To build image-inspector using godep:
 
     $ docker run -ti --rm --privileged \
       -v /var/run/docker.sock:/var/run/docker.sock \
-      fsimonce/image-inspector --image=fedora:20 --path=/tmp/image-content
+      openshift/image-inspector --image=fedora:20 --path=/tmp/image-content
