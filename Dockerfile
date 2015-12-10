@@ -1,15 +1,21 @@
-FROM centos:7
+FROM openshift/origin-base
 MAINTAINER Federico Simoncelli <fsimonce@redhat.com>
 
-RUN yum install -y golang git && yum clean all
+RUN yum install -y golang && yum clean all
 
-WORKDIR /go/src/github.com/openshift/image-inspector
-ADD .   /go/src/github.com/openshift/image-inspector
-ENV GOPATH /go
-ENV PATH $PATH:$GOROOT/bin:$GOPATH/bin
+ENV PKGPATH=/go/src/github.com/openshift/image-inspector
 
-RUN go get github.com/openshift/image-inspector && \
-    go build && \
-    mv ./image-inspector /usr/bin/
+WORKDIR $PKGPATH
+
+ADD .   $PKGPATH
+ENV GOBIN  /usr/bin
+ENV GOPATH /go:$PKGPATH/Godeps/_workspace
+
+RUN go install github.com/openshift/image-inspector && \
+    mkdir -p /var/lib/image-inspector
+
+EXPOSE 8080
+
+WORKDIR /var/lib/image-inspector
 
 ENTRYPOINT ["/usr/bin/image-inspector"]
