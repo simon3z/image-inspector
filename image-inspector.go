@@ -17,7 +17,7 @@ import (
 	"archive/tar"
 	"crypto/rand"
 
-	"github.com/fsouza/go-dockerclient"
+	docker "github.com/fsouza/go-dockerclient"
 	"golang.org/x/net/webdav"
 )
 
@@ -103,19 +103,57 @@ func generateRandomName() string {
 	return fmt.Sprintf("image-inspector-%016x", n)
 }
 
+func getAuthConfigs(dockercfg, username, password_file *string) *docker.AuthConfigurations {
+	imagePullAuths := &docker.AuthConfigurations{
+		map[string]docker.AuthConfiguration{"": docker.AuthConfiguration{}}}
+	if *dockercfg != "" {
+		reader, err := os.Open(*dockercfg)
+		if err != nil {
+			log.Fatalf("Unable to open docker config file: %v\n", err)
+		}
+		if imagePullAuths, err = docker.NewAuthConfigurations(reader); err != nil {
+			log.Fatalf("Unable to parse docker config file: %v\n", err)
+		}
+		if len(imagePullAuths.Configs) == 0 {
+			log.Fatalf("No auths were found in the given dockercfg file\n")
+		}
+	}
+	if *username != "" {
+		token, err := ioutil.ReadFile(*password_file)
+		if err != nil {
+			log.Fatalf("Unable to read password file: %v\n", err)
+		}
+		imagePullAuths = &docker.AuthConfigurations{
+			map[string]docker.AuthConfiguration{"": docker.AuthConfiguration{Username: *username, Password: string(token)}}}
+	}
+
+	return imagePullAuths
+}
+
 func main() {
 	uri := flag.String("docker", "unix:///var/run/docker.sock", "Daemon socket to connect to")
 	image := flag.String("image", "", "Docker image to inspect")
 	path := flag.String("path", "", "Destination path for the image files")
 	serve := flag.String("serve", "", "Host and port where to serve the image with webdav")
+	dockercfg := flag.String("dockercfg", "", "Location of the docker configuration file")
+	username := flag.String("username", "", "username for authenticating with the docker registry")
+	password_file := flag.String("password-file", "", "Location of a file that contains the password for authentication with the docker registry")
 
 	flag.Parse()
 
 	if *uri == "" {
-		log.Fatalf("Docker socket connection must be specified")
+		log.Fatalf("Docker socket connection must be specified\n")
 	}
 	if *image == "" {
-		log.Fatalf("Docker image to inspect must be specified")
+		log.Fatalf("Docker image to inspect must be specified\n")
+	}
+
+	if *dockercfg != "" && *username != "" {
+		log.Fatalf("Only specify dockercfg file or username/password pair for authentication\n")
+	}
+
+	if *username != "" && *password_file == "" {
+		log.Fatalf("Please specify password for the username\n")
 	}
 
 	client, err := docker.NewClient(*uri)
@@ -126,9 +164,16 @@ func main() {
 	if _, err := client.InspectImage(*image); err != nil {
 		log.Printf("Pulling image %s", *image)
 		imagePullOption := docker.PullImageOptions{Repository: *image}
-		imagePullAuth := docker.AuthConfiguration{} // TODO: support authentication
-		if err := client.PullImage(imagePullOption, imagePullAuth); err != nil {
-			log.Fatalf("Unable to pull docker image: %v\n", err)
+		imagePullAuths := getAuthConfigs(dockercfg, username, password_file)
+		// Try all the possible auth's from the config file
+		var authErr error
+		for _, auth := range imagePullAuths.Configs {
+			if authErr = client.PullImage(imagePullOption, auth); authErr == nil {
+				break
+			}
+		}
+		if authErr != nil {
+			log.Fatalf("Unable to pull docker image: %v\n", authErr)
 		}
 	} else {
 		log.Printf("Image %s is available, skipping image pull", *image)
