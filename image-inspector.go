@@ -60,23 +60,23 @@ func processTarStream(tr *tar.Reader, destination string) error {
 
 		hdrInfo := hdr.FileInfo()
 
-		path := path.Join(destination, strings.TrimPrefix(hdr.Name, DOCKER_TAR_PREFIX))
+		dstpath := path.Join(destination, strings.TrimPrefix(hdr.Name, DOCKER_TAR_PREFIX))
 		// Overriding permissions to allow writing content
 		mode := hdrInfo.Mode() | OWNER_PERM_RW
 
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := os.Mkdir(path, mode); err != nil {
+			if err := os.Mkdir(dstpath, mode); err != nil {
 				if !os.IsExist(err) {
 					return fmt.Errorf("Unable to create directory: %v", err)
 				}
-				err = os.Chmod(path, mode)
+				err = os.Chmod(dstpath, mode)
 				if err != nil {
 					return fmt.Errorf("Unable to update directory mode: %v", err)
 				}
 			}
 		case tar.TypeReg, tar.TypeRegA:
-			file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+			file, err := os.OpenFile(dstpath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
 			if err != nil {
 				return fmt.Errorf("Unable to create file: %v", err)
 			}
@@ -91,7 +91,7 @@ func processTarStream(tr *tar.Reader, destination string) error {
 		}
 
 		// maintaining access and modification time in best effort fashion
-		os.Chtimes(path, hdr.AccessTime, hdr.ModTime)
+		os.Chtimes(dstpath, hdr.AccessTime, hdr.ModTime)
 	}
 }
 
@@ -133,7 +133,7 @@ func getAuthConfigs(dockercfg, username, password_file *string) *docker.AuthConf
 func main() {
 	uri := flag.String("docker", "unix:///var/run/docker.sock", "Daemon socket to connect to")
 	image := flag.String("image", "", "Docker image to inspect")
-	path := flag.String("path", "", "Destination path for the image files")
+	dstpath := flag.String("path", "", "Destination path for the image files")
 	serve := flag.String("serve", "", "Host and port where to serve the image with webdav")
 	dockercfg := flag.String("dockercfg", "", "Location of the docker configuration file")
 	username := flag.String("username", "", "username for authenticating with the docker registry")
@@ -202,8 +202,8 @@ func main() {
 		log.Fatalf("Unable to get docker image information: %v\n", err)
 	}
 
-	if path != nil && *path != "" {
-		err = os.Mkdir(*path, 0755)
+	if dstpath != nil && *dstpath != "" {
+		err = os.Mkdir(*dstpath, 0755)
 		if err != nil {
 			if !os.IsExist(err) {
 				log.Fatalf("Unable to create destination path: %v\n", err)
@@ -211,16 +211,16 @@ func main() {
 		}
 	} else {
 		// forcing to use /var/tmp because often it's not an in-memory tmpfs
-		*path, err = ioutil.TempDir("/var/tmp", "image-inspector-")
+		*dstpath, err = ioutil.TempDir("/var/tmp", "image-inspector-")
 		if err != nil {
 			log.Fatalf("Unable to create temporary path: %v\n", err)
 		}
 	}
 
 	reader, writer := io.Pipe()
-	go handleTarStream(reader, *path)
+	go handleTarStream(reader, *dstpath)
 
-	log.Printf("Extracting image %s to %s", *image, *path)
+	log.Printf("Extracting image %s to %s", *image, *dstpath)
 	err = client.CopyFromContainer(docker.CopyFromContainerOptions{
 		Container:    container.ID,
 		OutputStream: writer,
@@ -237,7 +237,7 @@ func main() {
 	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
 
 	if serve != nil && *serve != "" {
-		log.Printf("Serving image content %s on webdav://%s%s", *path, *serve, CONTENT_URL_PREFIX)
+		log.Printf("Serving image content %s on webdav://%s%s", *dstpath, *serve, CONTENT_URL_PREFIX)
 
 		http.HandleFunc(HEALTHZ_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("ok\n"))
@@ -263,7 +263,7 @@ func main() {
 
 		http.Handle(CONTENT_URL_PREFIX, &webdav.Handler{
 			Prefix:     CONTENT_URL_PREFIX,
-			FileSystem: webdav.Dir(*path),
+			FileSystem: webdav.Dir(*dstpath),
 			LockSystem: webdav.NewMemLS(),
 		})
 
