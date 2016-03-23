@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"syscall"
 
 	"archive/tar"
 	"crypto/rand"
@@ -33,6 +34,7 @@ const (
 	API_URL_PREFIX     = "/api"
 	CONTENT_URL_PREFIX = API_URL_PREFIX + "/" + VERSION_TAG + "/content/"
 	METADATA_URL_PATH  = API_URL_PREFIX + "/" + VERSION_TAG + "/metadata"
+	CHROOT_SERVE_PATH  = "/"
 )
 
 func handleTarStream(reader io.ReadCloser, destination string) {
@@ -60,23 +62,23 @@ func processTarStream(tr *tar.Reader, destination string) error {
 
 		hdrInfo := hdr.FileInfo()
 
-		path := path.Join(destination, strings.TrimPrefix(hdr.Name, DOCKER_TAR_PREFIX))
+		dstpath := path.Join(destination, strings.TrimPrefix(hdr.Name, DOCKER_TAR_PREFIX))
 		// Overriding permissions to allow writing content
 		mode := hdrInfo.Mode() | OWNER_PERM_RW
 
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if err := os.Mkdir(path, mode); err != nil {
+			if err := os.Mkdir(dstpath, mode); err != nil {
 				if !os.IsExist(err) {
 					return fmt.Errorf("Unable to create directory: %v", err)
 				}
-				err = os.Chmod(path, mode)
+				err = os.Chmod(dstpath, mode)
 				if err != nil {
 					return fmt.Errorf("Unable to update directory mode: %v", err)
 				}
 			}
 		case tar.TypeReg, tar.TypeRegA:
-			file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+			file, err := os.OpenFile(dstpath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
 			if err != nil {
 				return fmt.Errorf("Unable to create file: %v", err)
 			}
@@ -85,13 +87,22 @@ func processTarStream(tr *tar.Reader, destination string) error {
 				return fmt.Errorf("Unable to write into file: %v", err)
 			}
 			file.Close()
+		case tar.TypeSymlink:
+			if err := os.Symlink(hdr.Linkname, dstpath); err != nil {
+				return fmt.Errorf("Unable to create symlink: %v\n", err)
+			}
+		case tar.TypeLink:
+			target := path.Join(destination, strings.TrimPrefix(hdr.Linkname, DOCKER_TAR_PREFIX))
+			if err := os.Link(target, dstpath); err != nil {
+				return fmt.Errorf("Unable to create link: %v\n", err)
+			}
 		default:
 			// For now we're skipping anything else. Special device files and
 			// symlinks are not needed or anyway probably incorrect.
 		}
 
 		// maintaining access and modification time in best effort fashion
-		os.Chtimes(path, hdr.AccessTime, hdr.ModTime)
+		os.Chtimes(dstpath, hdr.AccessTime, hdr.ModTime)
 	}
 }
 
@@ -133,8 +144,9 @@ func getAuthConfigs(dockercfg, username, password_file *string) *docker.AuthConf
 func main() {
 	uri := flag.String("docker", "unix:///var/run/docker.sock", "Daemon socket to connect to")
 	image := flag.String("image", "", "Docker image to inspect")
-	path := flag.String("path", "", "Destination path for the image files")
+	dstpath := flag.String("path", "", "Destination path for the image files")
 	serve := flag.String("serve", "", "Host and port where to serve the image with webdav")
+	chroot := flag.Bool("chroot", false, "Change root when serving the image with webdav")
 	dockercfg := flag.String("dockercfg", "", "Location of the docker configuration file")
 	username := flag.String("username", "", "username for authenticating with the docker registry")
 	password_file := flag.String("password-file", "", "Location of a file that contains the password for authentication with the docker registry")
@@ -142,18 +154,19 @@ func main() {
 	flag.Parse()
 
 	if *uri == "" {
-		log.Fatalf("Docker socket connection must be specified\n")
+		log.Fatalln("Docker socket connection must be specified")
 	}
 	if *image == "" {
-		log.Fatalf("Docker image to inspect must be specified\n")
+		log.Fatalln("Docker image to inspect must be specified")
 	}
-
 	if *dockercfg != "" && *username != "" {
-		log.Fatalf("Only specify dockercfg file or username/password pair for authentication\n")
+		log.Fatalln("Only specify dockercfg file or username/password pair for authentication")
 	}
-
 	if *username != "" && *password_file == "" {
-		log.Fatalf("Please specify password for the username\n")
+		log.Fatalln("Please specify password for the username")
+	}
+	if *serve == "" && *chroot {
+		log.Fatalln("Change root can be used only when serving the image through webdav")
 	}
 
 	client, err := docker.NewClient(*uri)
@@ -202,8 +215,8 @@ func main() {
 		log.Fatalf("Unable to get docker image information: %v\n", err)
 	}
 
-	if path != nil && *path != "" {
-		err = os.Mkdir(*path, 0755)
+	if dstpath != nil && *dstpath != "" {
+		err = os.Mkdir(*dstpath, 0755)
 		if err != nil {
 			if !os.IsExist(err) {
 				log.Fatalf("Unable to create destination path: %v\n", err)
@@ -211,16 +224,16 @@ func main() {
 		}
 	} else {
 		// forcing to use /var/tmp because often it's not an in-memory tmpfs
-		*path, err = ioutil.TempDir("/var/tmp", "image-inspector-")
+		*dstpath, err = ioutil.TempDir("/var/tmp", "image-inspector-")
 		if err != nil {
 			log.Fatalf("Unable to create temporary path: %v\n", err)
 		}
 	}
 
 	reader, writer := io.Pipe()
-	go handleTarStream(reader, *path)
+	go handleTarStream(reader, *dstpath)
 
-	log.Printf("Extracting image %s to %s", *image, *path)
+	log.Printf("Extracting image %s to %s", *image, *dstpath)
 	err = client.CopyFromContainer(docker.CopyFromContainerOptions{
 		Container:    container.ID,
 		OutputStream: writer,
@@ -236,8 +249,20 @@ func main() {
 
 	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
 
-	if serve != nil && *serve != "" {
-		log.Printf("Serving image content %s on webdav://%s%s", *path, *serve, CONTENT_URL_PREFIX)
+	if *serve != "" {
+		servePath := *dstpath
+		if *chroot {
+			if err := syscall.Chroot(*dstpath); err != nil {
+				log.Fatalf("Unable to chroot into %s: %v\n", *dstpath, err)
+			}
+			servePath = CHROOT_SERVE_PATH
+		} else {
+			log.Printf("!!!WARNING!!! It is insecure to serve the image content without changing")
+			log.Printf("root (--chroot). Absolute-path symlinks in the image can lead to disclose")
+			log.Printf("information of the hosting system.")
+		}
+
+		log.Printf("Serving image content %s on webdav://%s%s", *dstpath, *serve, CONTENT_URL_PREFIX)
 
 		http.HandleFunc(HEALTHZ_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("ok\n"))
@@ -263,7 +288,7 @@ func main() {
 
 		http.Handle(CONTENT_URL_PREFIX, &webdav.Handler{
 			Prefix:     CONTENT_URL_PREFIX,
-			FileSystem: webdav.Dir(*path),
+			FileSystem: webdav.Dir(servePath),
 			LockSystem: webdav.NewMemLS(),
 		})
 
