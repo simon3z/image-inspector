@@ -142,18 +142,16 @@ func main() {
 	flag.Parse()
 
 	if *uri == "" {
-		log.Fatalf("Docker socket connection must be specified\n")
+		log.Fatalln("Docker socket connection must be specified")
 	}
 	if *image == "" {
-		log.Fatalf("Docker image to inspect must be specified\n")
+		log.Fatalln("Docker image to inspect must be specified")
 	}
-
 	if *dockercfg != "" && *username != "" {
-		log.Fatalf("Only specify dockercfg file or username/password pair for authentication\n")
+		log.Fatalln("Only specify dockercfg file or username/password pair for authentication")
 	}
-
 	if *username != "" && *password_file == "" {
-		log.Fatalf("Please specify password for the username\n")
+		log.Fatalln("Please specify password for the username")
 	}
 
 	client, err := docker.NewClient(*uri)
@@ -236,7 +234,7 @@ func main() {
 
 	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
 
-	if serve != nil && *serve != "" {
+	if *serve != "" {
 		log.Printf("Serving image content %s on webdav://%s%s", *dstpath, *serve, CONTENT_URL_PREFIX)
 
 		http.HandleFunc(HEALTHZ_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
