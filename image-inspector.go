@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"syscall"
 
 	"archive/tar"
 	"crypto/rand"
@@ -33,6 +34,7 @@ const (
 	API_URL_PREFIX     = "/api"
 	CONTENT_URL_PREFIX = API_URL_PREFIX + "/" + VERSION_TAG + "/content/"
 	METADATA_URL_PATH  = API_URL_PREFIX + "/" + VERSION_TAG + "/metadata"
+	CHROOT_SERVE_PATH  = "/"
 )
 
 func handleTarStream(reader io.ReadCloser, destination string) {
@@ -85,6 +87,15 @@ func processTarStream(tr *tar.Reader, destination string) error {
 				return fmt.Errorf("Unable to write into file: %v", err)
 			}
 			file.Close()
+		case tar.TypeSymlink:
+			if err := os.Symlink(hdr.Linkname, dstpath); err != nil {
+				return fmt.Errorf("Unable to create symlink: %v\n", err)
+			}
+		case tar.TypeLink:
+			target := path.Join(destination, strings.TrimPrefix(hdr.Linkname, DOCKER_TAR_PREFIX))
+			if err := os.Link(target, dstpath); err != nil {
+				return fmt.Errorf("Unable to create link: %v\n", err)
+			}
 		default:
 			// For now we're skipping anything else. Special device files and
 			// symlinks are not needed or anyway probably incorrect.
@@ -135,6 +146,7 @@ func main() {
 	image := flag.String("image", "", "Docker image to inspect")
 	dstpath := flag.String("path", "", "Destination path for the image files")
 	serve := flag.String("serve", "", "Host and port where to serve the image with webdav")
+	chroot := flag.Bool("chroot", false, "Change root when serving the image with webdav")
 	dockercfg := flag.String("dockercfg", "", "Location of the docker configuration file")
 	username := flag.String("username", "", "username for authenticating with the docker registry")
 	password_file := flag.String("password-file", "", "Location of a file that contains the password for authentication with the docker registry")
@@ -152,6 +164,9 @@ func main() {
 	}
 	if *username != "" && *password_file == "" {
 		log.Fatalln("Please specify password for the username")
+	}
+	if *serve == "" && *chroot {
+		log.Fatalln("Change root can be used only when serving the image through webdav")
 	}
 
 	client, err := docker.NewClient(*uri)
@@ -235,6 +250,18 @@ func main() {
 	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
 
 	if *serve != "" {
+		servePath := *dstpath
+		if *chroot {
+			if err := syscall.Chroot(*dstpath); err != nil {
+				log.Fatalf("Unable to chroot into %s: %v\n", *dstpath, err)
+			}
+			servePath = CHROOT_SERVE_PATH
+		} else {
+			log.Printf("!!!WARNING!!! It is insecure to serve the image content without changing")
+			log.Printf("root (--chroot). Absolute-path symlinks in the image can lead to disclose")
+			log.Printf("information of the hosting system.")
+		}
+
 		log.Printf("Serving image content %s on webdav://%s%s", *dstpath, *serve, CONTENT_URL_PREFIX)
 
 		http.HandleFunc(HEALTHZ_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
@@ -261,7 +288,7 @@ func main() {
 
 		http.Handle(CONTENT_URL_PREFIX, &webdav.Handler{
 			Prefix:     CONTENT_URL_PREFIX,
-			FileSystem: webdav.Dir(*dstpath),
+			FileSystem: webdav.Dir(servePath),
 			LockSystem: webdav.NewMemLS(),
 		})
 
