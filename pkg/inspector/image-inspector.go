@@ -18,6 +18,7 @@ import (
 	"crypto/rand"
 
 	docker "github.com/fsouza/go-dockerclient"
+	"github.com/simon3z/image-inspector/pkg/openscap"
 	"golang.org/x/net/webdav"
 
 	iicmd "github.com/simon3z/image-inspector/pkg/cmd"
@@ -35,8 +36,13 @@ const (
 	API_URL_PREFIX     = "/api"
 	CONTENT_URL_PREFIX = API_URL_PREFIX + "/" + VERSION_TAG + "/content/"
 	METADATA_URL_PATH  = API_URL_PREFIX + "/" + VERSION_TAG + "/metadata"
+	OPENSCAP_URL_PATH  = API_URL_PREFIX + "/" + VERSION_TAG + "/openscap"
 	CHROOT_SERVE_PATH  = "/"
+	OSCAP_CVE_DIR      = "/tmp"
 )
+
+var osMkdir = os.Mkdir
+var ioutilTempDir = ioutil.TempDir
 
 // ImageInspector is the interface for all image inspectors.
 type ImageInspector interface {
@@ -47,11 +53,13 @@ type ImageInspector interface {
 // defaultImageInspector is the default implementation of ImageInspector.
 type defaultImageInspector struct {
 	opts iicmd.ImageInspectorOptions
+	meta InspectorMetadata
 }
 
 // NewDefaultImageInspector provides a new default inspector.
 func NewDefaultImageInspector(opts iicmd.ImageInspectorOptions) ImageInspector {
-	return &defaultImageInspector{opts}
+	return &defaultImageInspector{opts,
+		*NewInspectorMetadata(&docker.Image{})}
 }
 
 // Inspect inspects and serves the image based on the ImageInspectorOptions.
@@ -93,7 +101,7 @@ func (i *defaultImageInspector) Inspect() error {
 	container, err := client.CreateContainer(docker.CreateContainerOptions{
 		Name: randomName,
 		Config: &docker.Config{
-			Image:      i.opts.Image,
+			Image: i.opts.Image,
 			// For security purpose we don't define any entrypoint and command
 			Entrypoint: []string{""},
 			Cmd:        []string{""},
@@ -109,23 +117,13 @@ func (i *defaultImageInspector) Inspect() error {
 	}
 
 	imageMetadata, err := client.InspectImage(containerMetadata.Image)
+	i.meta.Image = *imageMetadata
 	if err != nil {
 		return fmt.Errorf("Unable to get docker image information: %v\n", err)
 	}
 
-	if len(i.opts.DstPath) > 0 {
-		err = os.Mkdir(i.opts.DstPath, 0755)
-		if err != nil {
-			if !os.IsExist(err) {
-				return fmt.Errorf("Unable to create destination path: %v\n", err)
-			}
-		}
-	} else {
-		// forcing to use /var/tmp because often it's not an in-memory tmpfs
-		i.opts.DstPath, err = ioutil.TempDir("/var/tmp", "image-inspector-")
-		if err != nil {
-			return fmt.Errorf("Unable to create temporary path: %v\n", err)
-		}
+	if i.opts.DstPath, err = createOutputDir(i.opts.DstPath, "image-inspector-"); err != nil {
+		return err
 	}
 
 	reader, writer := io.Pipe()
@@ -146,6 +144,21 @@ func (i *defaultImageInspector) Inspect() error {
 	})
 
 	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
+
+	var scanReport []byte
+	if i.opts.ScanType == "openscap" {
+		if i.opts.ScanResultsDir, err = createOutputDir(i.opts.ScanResultsDir, "image-inspector-scan-results-"); err != nil {
+			return err
+		}
+		scanner := openscap.NewDefaultScanner(OSCAP_CVE_DIR, i.opts.ScanResultsDir)
+		scanReport, err = i.scanImage(scanner)
+		if err != nil {
+			i.meta.OpenSCAP.SetError(err)
+			log.Printf("Unable to scan image: %v", err)
+		} else {
+			i.meta.OpenSCAP.Status = StatusSuccess
+		}
+	}
 
 	if len(i.opts.Serve) > 0 {
 		servePath := i.opts.DstPath
@@ -176,12 +189,25 @@ func (i *defaultImageInspector) Inspect() error {
 		})
 
 		http.HandleFunc(METADATA_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
-			body, err := json.MarshalIndent(imageMetadata, "", "  ")
+			body, err := json.MarshalIndent(i.meta, "", "  ")
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			w.Write(body)
+		})
+
+		http.HandleFunc(OPENSCAP_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
+			if i.opts.ScanType == "openscap" && i.meta.OpenSCAP.Status == StatusSuccess {
+				w.Write(scanReport)
+			} else {
+				if i.meta.OpenSCAP.Status == StatusError {
+					http.Error(w, fmt.Sprintf("OpenSCAP Error: %s", i.meta.OpenSCAP.ErrorMessage),
+						http.StatusInternalServerError)
+				} else {
+					http.Error(w, "OpenSCAP option was not chosen", http.StatusNotFound)
+				}
+			}
 		})
 
 		http.Handle(CONTENT_URL_PREFIX, &webdav.Handler{
@@ -297,4 +323,37 @@ func getAuthConfigs(dockercfg, username, password_file string) (*docker.AuthConf
 	}
 
 	return imagePullAuths, nil
+}
+
+func (i *defaultImageInspector) scanImage(s openscap.Scanner) ([]byte, error) {
+	log.Printf("%s scanning %s. Placing results in %s",
+		s.ScannerName(), i.opts.DstPath, i.opts.ScanResultsDir)
+	err := s.Scan(i.opts.DstPath, &i.meta.Image)
+	if err != nil {
+		return []byte(""), fmt.Errorf("Unable to run %s: %v\n", s.ScannerName(), err)
+	}
+	scanReport, err := ioutil.ReadFile(s.ResultsFileName())
+	if err != nil {
+		return []byte(""), fmt.Errorf("Unable to read %s result file: %v\n", s.ScannerName(), err)
+	}
+	return scanReport, nil
+}
+
+func createOutputDir(dirName string, tempName string) (string, error) {
+	if len(dirName) > 0 {
+		err = os.Mkdir(dirName, 0755)
+		if err != nil {
+			if !os.IsExist(err) {
+				return "", fmt.Errorf("Unable to create destination path: %v\n", err)
+			}
+		}
+	} else {
+		// forcing to use /var/tmp because often it's not an in-memory tmpfs
+		var err error
+		dirName, err = ioutilTempDir("/var/tmp", tempName)
+		if err != nil {
+			return "", fmt.Errorf("Unable to create temporary path: %v\n", err)
+		}
+	}
+	return dirName, nil
 }
