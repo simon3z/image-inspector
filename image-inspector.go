@@ -37,6 +37,62 @@ const (
 	CHROOT_SERVE_PATH  = "/"
 )
 
+// ImageInspectorOptions is the main inspector implementation (TODO - migrate most of main method
+// into inspector methods so they can be tested outside of a main call) and holds the configuration
+// for an image inspector.
+type ImageInspectorOptions struct {
+	// URI contains the location of the docker daemon socket to connect to.
+	URI string
+	// Image contains the docker image to inspect.
+	Image string
+	// DstPath is the destination path for image files.
+	DstPath string
+	// Serve holds the host and port for where to serve the image with webdav.
+	Serve string
+	// Chroot controls whether or not a chroot is excuted when serving the image with webdav.
+	Chroot bool
+	// DockerCfg is the location of the docker config file.
+	DockerCfg string
+	// Username is the username for authenticating to the docker registry.
+	Username string
+	// PasswordFile is the location of the file containing the password for authentication to the
+	// docker registry.
+	PasswordFile string
+}
+
+func NewDefaultImageInspectorOptions() *ImageInspectorOptions {
+	return &ImageInspectorOptions{
+		URI:          "unix:///var/run/docker.sock",
+		Image:        "",
+		DstPath:      "",
+		Serve:        "",
+		Chroot:       false,
+		DockerCfg:    "",
+		Username:     "",
+		PasswordFile: "",
+	}
+}
+
+// Validate performs validation on the field settings.
+func (i *ImageInspectorOptions) Validate() error {
+	if len(i.URI) == 0 {
+		return fmt.Errorf("Docker socket connection must be specified")
+	}
+	if len(i.Image) == 0 {
+		return fmt.Errorf("Docker image to inspect must be specified")
+	}
+	if len(i.DockerCfg) > 0 && len(i.Username) > 0 {
+		return fmt.Errorf("Only specify dockercfg file or username/password pair for authentication")
+	}
+	if len(i.Username) > 0 && len(i.PasswordFile) == 0 {
+		return fmt.Errorf("Please specify password for the username")
+	}
+	if len(i.Serve) == 0 && i.Chroot {
+		return fmt.Errorf("Change root can be used only when serving the image through webdav")
+	}
+	return nil
+}
+
 func handleTarStream(reader io.ReadCloser, destination string) {
 	tr := tar.NewReader(reader)
 	if tr != nil {
@@ -114,11 +170,11 @@ func generateRandomName() string {
 	return fmt.Sprintf("image-inspector-%016x", n)
 }
 
-func getAuthConfigs(dockercfg, username, password_file *string) *docker.AuthConfigurations {
+func getAuthConfigs(dockercfg, username, password_file string) *docker.AuthConfigurations {
 	imagePullAuths := &docker.AuthConfigurations{
-		map[string]docker.AuthConfiguration{"": docker.AuthConfiguration{}}}
-	if *dockercfg != "" {
-		reader, err := os.Open(*dockercfg)
+		map[string]docker.AuthConfiguration{"": {}}}
+	if dockercfg != "" {
+		reader, err := os.Open(dockercfg)
 		if err != nil {
 			log.Fatalf("Unable to open docker config file: %v\n", err)
 		}
@@ -129,55 +185,45 @@ func getAuthConfigs(dockercfg, username, password_file *string) *docker.AuthConf
 			log.Fatalf("No auths were found in the given dockercfg file\n")
 		}
 	}
-	if *username != "" {
-		token, err := ioutil.ReadFile(*password_file)
+	if username != "" {
+		token, err := ioutil.ReadFile(password_file)
 		if err != nil {
 			log.Fatalf("Unable to read password file: %v\n", err)
 		}
 		imagePullAuths = &docker.AuthConfigurations{
-			map[string]docker.AuthConfiguration{"": docker.AuthConfiguration{Username: *username, Password: string(token)}}}
+			map[string]docker.AuthConfiguration{"": {Username: username, Password: string(token)}}}
 	}
 
 	return imagePullAuths
 }
 
 func main() {
-	uri := flag.String("docker", "unix:///var/run/docker.sock", "Daemon socket to connect to")
-	image := flag.String("image", "", "Docker image to inspect")
-	dstpath := flag.String("path", "", "Destination path for the image files")
-	serve := flag.String("serve", "", "Host and port where to serve the image with webdav")
-	chroot := flag.Bool("chroot", false, "Change root when serving the image with webdav")
-	dockercfg := flag.String("dockercfg", "", "Location of the docker configuration file")
-	username := flag.String("username", "", "username for authenticating with the docker registry")
-	password_file := flag.String("password-file", "", "Location of a file that contains the password for authentication with the docker registry")
+	inspectorOptions := NewDefaultImageInspectorOptions()
+
+	flag.StringVar(&inspectorOptions.URI, "docker", inspectorOptions.URI, "Daemon socket to connect to")
+	flag.StringVar(&inspectorOptions.Image, "image", inspectorOptions.Image, "Docker image to inspect")
+	flag.StringVar(&inspectorOptions.DstPath, "path", inspectorOptions.DstPath, "Destination path for the image files")
+	flag.StringVar(&inspectorOptions.Serve, "serve", inspectorOptions.Serve, "Host and port where to serve the image with webdav")
+	flag.BoolVar(&inspectorOptions.Chroot, "chroot", inspectorOptions.Chroot, "Change root when serving the image with webdav")
+	flag.StringVar(&inspectorOptions.DockerCfg, "dockercfg", inspectorOptions.DockerCfg, "Location of the docker configuration file")
+	flag.StringVar(&inspectorOptions.Username, "username", inspectorOptions.Username, "username for authenticating with the docker registry")
+	flag.StringVar(&inspectorOptions.PasswordFile, "password-file", inspectorOptions.PasswordFile, "Location of a file that contains the password for authentication with the docker registry")
 
 	flag.Parse()
 
-	if *uri == "" {
-		log.Fatalln("Docker socket connection must be specified")
-	}
-	if *image == "" {
-		log.Fatalln("Docker image to inspect must be specified")
-	}
-	if *dockercfg != "" && *username != "" {
-		log.Fatalln("Only specify dockercfg file or username/password pair for authentication")
-	}
-	if *username != "" && *password_file == "" {
-		log.Fatalln("Please specify password for the username")
-	}
-	if *serve == "" && *chroot {
-		log.Fatalln("Change root can be used only when serving the image through webdav")
+	if err := inspectorOptions.Validate(); err != nil {
+		log.Fatal(err)
 	}
 
-	client, err := docker.NewClient(*uri)
+	client, err := docker.NewClient(inspectorOptions.URI)
 	if err != nil {
 		log.Fatalf("Unable to connect to docker daemon: %v\n", err)
 	}
 
-	if _, err := client.InspectImage(*image); err != nil {
-		log.Printf("Pulling image %s", *image)
-		imagePullOption := docker.PullImageOptions{Repository: *image}
-		imagePullAuths := getAuthConfigs(dockercfg, username, password_file)
+	if _, err := client.InspectImage(inspectorOptions.Image); err != nil {
+		log.Printf("Pulling image %s", inspectorOptions.Image)
+		imagePullOption := docker.PullImageOptions{Repository: inspectorOptions.Image}
+		imagePullAuths := getAuthConfigs(inspectorOptions.DockerCfg, inspectorOptions.Username, inspectorOptions.PasswordFile)
 		// Try all the possible auth's from the config file
 		var authErr error
 		for _, auth := range imagePullAuths.Configs {
@@ -189,14 +235,14 @@ func main() {
 			log.Fatalf("Unable to pull docker image: %v\n", authErr)
 		}
 	} else {
-		log.Printf("Image %s is available, skipping image pull", *image)
+		log.Printf("Image %s is available, skipping image pull", inspectorOptions.Image)
 	}
 
 	// For security purpose we don't define any entrypoint and command
 	container, err := client.CreateContainer(docker.CreateContainerOptions{
 		Name: generateRandomName(),
 		Config: &docker.Config{
-			Image:      *image,
+			Image:      inspectorOptions.Image,
 			Entrypoint: []string{""},
 			Cmd:        []string{""},
 		},
@@ -215,8 +261,8 @@ func main() {
 		log.Fatalf("Unable to get docker image information: %v\n", err)
 	}
 
-	if dstpath != nil && *dstpath != "" {
-		err = os.Mkdir(*dstpath, 0755)
+	if len(inspectorOptions.DstPath) > 0 {
+		err = os.Mkdir(inspectorOptions.DstPath, 0755)
 		if err != nil {
 			if !os.IsExist(err) {
 				log.Fatalf("Unable to create destination path: %v\n", err)
@@ -224,16 +270,16 @@ func main() {
 		}
 	} else {
 		// forcing to use /var/tmp because often it's not an in-memory tmpfs
-		*dstpath, err = ioutil.TempDir("/var/tmp", "image-inspector-")
+		inspectorOptions.DstPath, err = ioutil.TempDir("/var/tmp", "image-inspector-")
 		if err != nil {
 			log.Fatalf("Unable to create temporary path: %v\n", err)
 		}
 	}
 
 	reader, writer := io.Pipe()
-	go handleTarStream(reader, *dstpath)
+	go handleTarStream(reader, inspectorOptions.DstPath)
 
-	log.Printf("Extracting image %s to %s", *image, *dstpath)
+	log.Printf("Extracting image %s to %s", inspectorOptions.Image, inspectorOptions.DstPath)
 	err = client.CopyFromContainer(docker.CopyFromContainerOptions{
 		Container:    container.ID,
 		OutputStream: writer,
@@ -249,11 +295,11 @@ func main() {
 
 	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
 
-	if *serve != "" {
-		servePath := *dstpath
-		if *chroot {
-			if err := syscall.Chroot(*dstpath); err != nil {
-				log.Fatalf("Unable to chroot into %s: %v\n", *dstpath, err)
+	if len(inspectorOptions.Serve) > 0 {
+		servePath := inspectorOptions.DstPath
+		if inspectorOptions.Chroot {
+			if err := syscall.Chroot(inspectorOptions.DstPath); err != nil {
+				log.Fatalf("Unable to chroot into %s: %v\n", inspectorOptions.DstPath, err)
 			}
 			servePath = CHROOT_SERVE_PATH
 		} else {
@@ -262,7 +308,7 @@ func main() {
 			log.Printf("information of the hosting system.")
 		}
 
-		log.Printf("Serving image content %s on webdav://%s%s", *dstpath, *serve, CONTENT_URL_PREFIX)
+		log.Printf("Serving image content %s on webdav://%s%s", inspectorOptions.DstPath, inspectorOptions.Serve, CONTENT_URL_PREFIX)
 
 		http.HandleFunc(HEALTHZ_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("ok\n"))
@@ -292,6 +338,6 @@ func main() {
 			LockSystem: webdav.NewMemLS(),
 		})
 
-		log.Fatal(http.ListenAndServe(*serve, nil))
+		log.Fatal(http.ListenAndServe(inspectorOptions.Serve, nil))
 	}
 }
