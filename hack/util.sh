@@ -294,7 +294,7 @@ function truncate_large_logs() {
 
 # Handler for when we exit automatically on an error.
 # Borrowed from https://gist.github.com/ahendrix/7030300
-os::log::errexit() {
+ii::log::errexit() {
 	local err="${PIPESTATUS[@]}"
 
 	# If the shell we are in doesn't have errexit set (common in subshells) then
@@ -303,13 +303,13 @@ os::log::errexit() {
 
 	set +o xtrace
 	local code="${1:-1}"
-	os::log::error_exit "'${BASH_COMMAND}' exited with status $err" "${1:-1}" 1
+	ii::log::error_exit "'${BASH_COMMAND}' exited with status $err" "${1:-1}" 1
 }
 
-os::log::install_errexit() {
+ii::log::install_errexit() {
 	# trap ERR to provide an error handler whenever a command exits nonzero this
 	# is a more verbose version of set -o errexit
-	trap 'os::log::errexit' ERR
+	trap 'ii::log::errexit' ERR
 
 	# setting errtrace allows our ERR trap handler to be propagated to functions,
 	# expansions and subshells
@@ -320,7 +320,7 @@ os::log::install_errexit() {
 #
 # Args:
 #	 $1 The number of stack frames to skip when printing.
-os::log::stack() {
+ii::log::stack() {
 	local stack_skip=${1:-0}
 	stack_skip=$((stack_skip + 1))
 	if [[ ${#FUNCNAME[@]} -gt $stack_skip ]]; then
@@ -342,7 +342,7 @@ os::log::stack() {
 #	 $1 Message to log with the error
 #	 $2 The error code to return
 #	 $3 The number of stack frames to skip when printing.
-os::log::error_exit() {
+ii::log::error_exit() {
 	local message="${1:-}"
 	local code="${2:-1}"
 	local stack_skip="${3:-0}"
@@ -355,29 +355,29 @@ os::log::error_exit() {
 	echo "	${1}" >&2
 	}
 
-	os::log::stack $stack_skip
+	ii::log::stack $stack_skip
 
 	echo "Exiting with status ${code}" >&2
 	exit "${code}"
 }
 
-os::log::with-severity() {
+ii::log::with-severity() {
   local msg=$1
   local severity=$2
 
   echo "[$2] ${1}"
 }
 
-os::log::info() {
-  os::log::with-severity "${1}" "INFO"
+ii::log::info() {
+  ii::log::with-severity "${1}" "INFO"
 }
 
-os::log::warn() {
-  os::log::with-severity "${1}" "WARNING"
+ii::log::warn() {
+  ii::log::with-severity "${1}" "WARNING"
 }
 
-os::log::error() {
-  os::log::with-severity "${1}" "ERROR"
+ii::log::error() {
+  ii::log::with-severity "${1}" "ERROR"
 }
 
 find_files() {
@@ -398,11 +398,11 @@ find_files() {
 
 # Asks golang what it thinks the host platform is.  The go tool chain does some
 # slightly different things when the target platform matches the host platform.
-os::util::host_platform() {
+ii::util::host_platform() {
   echo "$(go env GOHOSTOS)/$(go env GOHOSTARCH)"
 }
 
-os::util::sed() {
+ii::util::sed() {
   if [[ "$(go env GOHOSTOS)" == "darwin" ]]; then
   	sed -i '' "$@"
   else
@@ -410,7 +410,7 @@ os::util::sed() {
   fi
 }
 
-os::util::base64decode() {
+ii::util::base64decode() {
   if [[ "$(go env GOHOSTOS)" == "darwin" ]]; then
   	base64 -D $@
   else
@@ -418,7 +418,7 @@ os::util::base64decode() {
   fi
 }
 
-os::util::get_object_assert() {
+ii::util::get_object_assert() {
   local object=$1
   local request=$2
   local expected=$3

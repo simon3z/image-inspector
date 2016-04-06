@@ -8,11 +8,11 @@ set -o nounset
 set -o pipefail
 
 STARTTIME=$(date +%s)
-OS_ROOT=$(dirname "${BASH_SOURCE}")/..
+II_ROOT=$(dirname "${BASH_SOURCE}")/..
 
-source "${OS_ROOT}/hack/util.sh"
-os::log::install_errexit
+source "${II_ROOT}/hack/util.sh"
+ii::log::install_errexit
 
 go build -o _output/local/bin/image-inspector cmd/image-inspector.go
-export PATH=${OS_ROOT}/_output/local/bin:$PATH
-$OS_ROOT/test/end-to-end/e2e.sh
+export PATH=${II_ROOT}/_output/local/bin:$PATH
+$II_ROOT/test/end-to-end/e2e.sh
