@@ -17,7 +17,7 @@ func main() {
 	flag.StringVar(&inspectorOptions.DstPath, "path", inspectorOptions.DstPath, "Destination path for the image files")
 	flag.StringVar(&inspectorOptions.Serve, "serve", inspectorOptions.Serve, "Host and port where to serve the image with webdav")
 	flag.BoolVar(&inspectorOptions.Chroot, "chroot", inspectorOptions.Chroot, "Change root when serving the image with webdav")
-	flag.StringVar(&inspectorOptions.DockerCfg, "dockercfg", inspectorOptions.DockerCfg, "Location of the docker configuration file")
+	flag.Var(&inspectorOptions.DockerCfg, "dockercfg", "Location of the docker configuration files. May be specified more than once")
 	flag.StringVar(&inspectorOptions.Username, "username", inspectorOptions.Username, "username for authenticating with the docker registry")
 	flag.StringVar(&inspectorOptions.PasswordFile, "password-file", inspectorOptions.PasswordFile, "Location of a file that contains the password for authentication with the docker registry")
 	flag.StringVar(&inspectorOptions.ScanType, "scan-type", inspectorOptions.ScanType, fmt.Sprintf("The type of the scan to be done on the inspected image. Available scan types are: %v", iicmd.ScanOptions))

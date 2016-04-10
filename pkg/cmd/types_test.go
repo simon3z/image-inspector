@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -10,7 +11,7 @@ func TestValidate(t *testing.T) {
 
 	dockerCfgAndUsername := NewDefaultImageInspectorOptions()
 	dockerCfgAndUsername.Image = "image"
-	dockerCfgAndUsername.DockerCfg = "foo"
+	dockerCfgAndUsername.DockerCfg.Set("foo")
 	dockerCfgAndUsername.Username = "bar"
 
 	usernameNoPasswordFile := NewDefaultImageInspectorOptions()
@@ -28,7 +29,7 @@ func TestValidate(t *testing.T) {
 
 	goodConfigWithDockerCfg := NewDefaultImageInspectorOptions()
 	goodConfigWithDockerCfg.Image = "image"
-	goodConfigWithDockerCfg.DockerCfg = "types.go"
+	goodConfigWithDockerCfg.DockerCfg.Set("types.go")
 
 	noScanTypeAndDir := NewDefaultImageInspectorOptions()
 	noScanTypeAndDir.Image = "image"
@@ -51,7 +52,7 @@ func TestValidate(t *testing.T) {
 
 	noSuchFileDockercfg := NewDefaultImageInspectorOptions()
 	noSuchFileDockercfg.Image = "image"
-	noSuchFileDockercfg.DockerCfg = "nosuchfile"
+	noSuchFileDockercfg.DockerCfg.Set("nosuchfile")
 
 	tests := map[string]struct {
 		inspector      *ImageInspectorOptions
@@ -80,5 +81,15 @@ func TestValidate(t *testing.T) {
 		if !v.shouldValidate && err == nil {
 			t.Errorf("%s expected to be invalid but received no error", k)
 		}
+	}
+
+	// for 100% coverage we need to test MultiStringVar::String
+	goodConfigWithDockerCfg.DockerCfg.Set("types_test.go")
+	if len(goodConfigWithDockerCfg.DockerCfg.Values) != 2 {
+		t.Errorf("MultiStringVar Set didn't add to the lenght of Values")
+	}
+	st := goodConfigWithDockerCfg.DockerCfg.String()
+	if !strings.Contains(st, "types.go") || !strings.Contains(st, "types_test.go") {
+		t.Errorf("MultiStringVar Set didn't add to the right values or Strings didn't return them")
 	}
 }

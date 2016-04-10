@@ -9,6 +9,20 @@ var (
 	ScanOptions = []string{"openscap"}
 )
 
+// MultiStringVar is implementing flag.Value
+type MultiStringVar struct {
+	Values []string
+}
+
+func (sv *MultiStringVar) Set(s string) error {
+	sv.Values = append(sv.Values, s)
+	return nil
+}
+
+func (sv *MultiStringVar) String() string {
+	return fmt.Sprintf("%v", sv.Values)
+}
+
 // ImageInspectorOptions is the main inspector implementation and holds the configuration
 // for an image inspector.
 type ImageInspectorOptions struct {
@@ -23,7 +37,7 @@ type ImageInspectorOptions struct {
 	// Chroot controls whether or not a chroot is excuted when serving the image with webdav.
 	Chroot bool
 	// DockerCfg is the location of the docker config file.
-	DockerCfg string
+	DockerCfg MultiStringVar
 	// Username is the username for authenticating to the docker registry.
 	Username string
 	// PasswordFile is the location of the file containing the password for authentication to the
@@ -43,7 +57,7 @@ func NewDefaultImageInspectorOptions() *ImageInspectorOptions {
 		DstPath:        "",
 		Serve:          "",
 		Chroot:         false,
-		DockerCfg:      "",
+		DockerCfg:      MultiStringVar{[]string{}},
 		Username:       "",
 		PasswordFile:   "",
 		ScanType:       "",
@@ -59,7 +73,7 @@ func (i *ImageInspectorOptions) Validate() error {
 	if len(i.Image) == 0 {
 		return fmt.Errorf("Docker image to inspect must be specified")
 	}
-	if len(i.DockerCfg) > 0 && len(i.Username) > 0 {
+	if len(i.DockerCfg.Values) > 0 && len(i.Username) > 0 {
 		return fmt.Errorf("Only specify dockercfg file or username/password pair for authentication")
 	}
 	if len(i.Username) > 0 && len(i.PasswordFile) == 0 {
@@ -77,7 +91,7 @@ func (i *ImageInspectorOptions) Validate() error {
 			return fmt.Errorf("%s is not a directory", i.ScanResultsDir)
 		}
 	}
-	for _, fl := range []string{i.DockerCfg, i.PasswordFile} {
+	for _, fl := range append(i.DockerCfg.Values, i.PasswordFile) {
 		if len(fl) > 0 {
 			if _, err := os.Stat(fl); os.IsNotExist(err) {
 				return fmt.Errorf("%s does not exists", fl)

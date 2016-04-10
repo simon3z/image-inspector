@@ -75,7 +75,7 @@ func (i *defaultImageInspector) Inspect() error {
 
 		var imagePullAuths *docker.AuthConfigurations
 		var authCfgErr error
-		if imagePullAuths, authCfgErr = getAuthConfigs(i.opts.DockerCfg, i.opts.Username, i.opts.PasswordFile); authCfgErr != nil {
+		if imagePullAuths, authCfgErr = i.getAuthConfigs(); authCfgErr != nil {
 			return authCfgErr
 		}
 
@@ -330,28 +330,43 @@ func generateRandomName() (string, error) {
 	return fmt.Sprintf("image-inspector-%016x", n), nil
 }
 
-func getAuthConfigs(dockercfg, username, password_file string) (*docker.AuthConfigurations, error) {
+func appendDockerCfgConfigs(dockercfg string, cfgs *docker.AuthConfigurations) error {
+	var imagePullAuths *docker.AuthConfigurations
+	reader, err := os.Open(dockercfg)
+	if err != nil {
+		return fmt.Errorf("Unable to open docker config file: %v\n", err)
+	}
+	if imagePullAuths, err = docker.NewAuthConfigurations(reader); err != nil {
+		return fmt.Errorf("Unable to parse docker config file: %v\n", err)
+	}
+	if len(imagePullAuths.Configs) == 0 {
+		return fmt.Errorf("No auths were found in the given dockercfg file\n")
+	}
+	for name, ac := range imagePullAuths.Configs {
+		cfgs.Configs[fmt.Sprintf("%s/%s", dockercfg, name)] = ac
+	}
+	reader.Close()
+	return nil
+}
+
+func (i *defaultImageInspector) getAuthConfigs() (*docker.AuthConfigurations, error) {
 	imagePullAuths := &docker.AuthConfigurations{
-		map[string]docker.AuthConfiguration{"": {}}}
-	if dockercfg != "" {
-		reader, err := os.Open(dockercfg)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to open docker config file: %v\n", err)
-		}
-		if imagePullAuths, err = docker.NewAuthConfigurations(reader); err != nil {
-			return nil, fmt.Errorf("Unable to parse docker config file: %v\n", err)
-		}
-		if len(imagePullAuths.Configs) == 0 {
-			return nil, fmt.Errorf("No auths were found in the given dockercfg file\n")
+		map[string]docker.AuthConfiguration{}}
+	if len(i.opts.DockerCfg.Values) > 0 {
+		for _, dcfgFile := range i.opts.DockerCfg.Values {
+			if err := appendDockerCfgConfigs(dcfgFile, imagePullAuths); err != nil {
+				return nil, err
+			}
 		}
 	}
-	if username != "" {
-		token, err := ioutil.ReadFile(password_file)
+
+	if i.opts.Username != "" {
+		token, err := ioutil.ReadFile(i.opts.PasswordFile)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to read password file: %v\n", err)
 		}
 		imagePullAuths = &docker.AuthConfigurations{
-			map[string]docker.AuthConfiguration{"": {Username: username, Password: string(token)}}}
+			map[string]docker.AuthConfiguration{"": {Username: i.opts.Username, Password: string(token)}}}
 	}
 
 	return imagePullAuths, nil
