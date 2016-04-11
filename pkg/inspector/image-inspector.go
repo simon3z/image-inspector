@@ -1,31 +1,24 @@
 package inspector
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"math"
 	"math/big"
-	"net/http"
 	"os"
 	"path"
 	"strings"
-	"syscall"
 
 	"archive/tar"
 	"crypto/rand"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"golang.org/x/net/webdav"
 
 	iicmd "github.com/simon3z/image-inspector/pkg/cmd"
+	apiserver "github.com/simon3z/image-inspector/pkg/imageserver"
 )
-
-type APIVersions struct {
-	Versions []string `json:"versions"`
-}
 
 const (
 	VERSION_TAG        = "v1"
@@ -47,11 +40,30 @@ type ImageInspector interface {
 // defaultImageInspector is the default implementation of ImageInspector.
 type defaultImageInspector struct {
 	opts iicmd.ImageInspectorOptions
+	// an optional image server that will server content for inspection.
+	imageServer apiserver.ImageServer
 }
 
 // NewDefaultImageInspector provides a new default inspector.
 func NewDefaultImageInspector(opts iicmd.ImageInspectorOptions) ImageInspector {
-	return &defaultImageInspector{opts}
+	inspector := &defaultImageInspector{
+		opts: opts,
+	}
+
+	// if serving then set up an image server
+	if len(opts.Serve) > 0 {
+		imageServerOpts := apiserver.ImageServerOptions{
+			ServePath:     opts.Serve,
+			HealthzURL:    HEALTHZ_URL_PATH,
+			APIURL:        API_URL_PREFIX,
+			APIVersions:   apiserver.APIVersions{Versions: []string{VERSION_TAG}},
+			MetadataURL:   METADATA_URL_PATH,
+			ContentURL:    CONTENT_URL_PREFIX,
+			ImageServeURL: opts.DstPath,
+		}
+		inspector.imageServer = apiserver.NewWebdavImageServer(imageServerOpts, opts.Chroot)
+	}
+	return inspector
 }
 
 // Inspect inspects and serves the image based on the ImageInspectorOptions.
@@ -93,7 +105,7 @@ func (i *defaultImageInspector) Inspect() error {
 	container, err := client.CreateContainer(docker.CreateContainerOptions{
 		Name: randomName,
 		Config: &docker.Config{
-			Image:      i.opts.Image,
+			Image: i.opts.Image,
 			// For security purpose we don't define any entrypoint and command
 			Entrypoint: []string{""},
 			Cmd:        []string{""},
@@ -145,52 +157,8 @@ func (i *defaultImageInspector) Inspect() error {
 		ID: container.ID,
 	})
 
-	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
-
-	if len(i.opts.Serve) > 0 {
-		servePath := i.opts.DstPath
-		if i.opts.Chroot {
-			if err := syscall.Chroot(i.opts.DstPath); err != nil {
-				return fmt.Errorf("Unable to chroot into %s: %v\n", i.opts.DstPath, err)
-			}
-			servePath = CHROOT_SERVE_PATH
-		} else {
-			log.Printf("!!!WARNING!!! It is insecure to serve the image content without changing")
-			log.Printf("root (--chroot). Absolute-path symlinks in the image can lead to disclose")
-			log.Printf("information of the hosting system.")
-		}
-
-		log.Printf("Serving image content %s on webdav://%s%s", i.opts.DstPath, i.opts.Serve, CONTENT_URL_PREFIX)
-
-		http.HandleFunc(HEALTHZ_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("ok\n"))
-		})
-
-		http.HandleFunc(API_URL_PREFIX, func(w http.ResponseWriter, r *http.Request) {
-			body, err := json.MarshalIndent(supportedVersions, "", "  ")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Write(body)
-		})
-
-		http.HandleFunc(METADATA_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
-			body, err := json.MarshalIndent(imageMetadata, "", "  ")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Write(body)
-		})
-
-		http.Handle(CONTENT_URL_PREFIX, &webdav.Handler{
-			Prefix:     CONTENT_URL_PREFIX,
-			FileSystem: webdav.Dir(servePath),
-			LockSystem: webdav.NewMemLS(),
-		})
-
-		return http.ListenAndServe(i.opts.Serve, nil)
+	if i.imageServer != nil {
+		return i.imageServer.ServeImage(imageMetadata)
 	}
 	return nil
 }
