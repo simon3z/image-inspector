@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	oscapscanner "github.com/openshift/image-inspector/pkg/openscap"
-	"os"
-)
 
-var (
-	ScanOptions = []string{"openscap"}
+	oscapscanner "github.com/openshift/image-inspector/pkg/openscap"
+
+	iiapi "github.com/openshift/image-inspector/pkg/api"
+
+	"os"
 )
 
 // MultiStringVar is implementing flag.Value
@@ -110,14 +110,15 @@ func (i *ImageInspectorOptions) Validate() error {
 	}
 	if len(i.ScanType) > 0 {
 		var found bool = false
-		for _, opt := range ScanOptions {
+		for _, opt := range iiapi.ScanOptions {
 			if i.ScanType == opt {
 				found = true
 				break
 			}
 		}
 		if !found {
-			return fmt.Errorf("%s is not one of the available scan-types which are %v", i.ScanType, ScanOptions)
+			return fmt.Errorf("%s is not one of the available scan-types which are %v",
+				i.ScanType, iiapi.ScanOptions)
 		}
 
 	}

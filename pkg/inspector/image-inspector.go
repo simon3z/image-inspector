@@ -1,33 +1,27 @@
 package inspector
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"math"
 	"math/big"
-	"net/http"
 	"os"
 	"path"
 	"strings"
-	"syscall"
-	"time"
 
 	"archive/tar"
 	"crypto/rand"
 
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/openshift/image-inspector/pkg/openscap"
-	"golang.org/x/net/webdav"
 
 	iicmd "github.com/openshift/image-inspector/pkg/cmd"
-)
 
-type APIVersions struct {
-	Versions []string `json:"versions"`
-}
+	iiapi "github.com/openshift/image-inspector/pkg/api"
+	apiserver "github.com/openshift/image-inspector/pkg/imageserver"
+)
 
 const (
 	VERSION_TAG              = "v1"
@@ -56,13 +50,36 @@ type ImageInspector interface {
 // defaultImageInspector is the default implementation of ImageInspector.
 type defaultImageInspector struct {
 	opts iicmd.ImageInspectorOptions
-	meta InspectorMetadata
+	meta iiapi.InspectorMetadata
+	// an optional image server that will server content for inspection.
+	imageServer apiserver.ImageServer
 }
 
 // NewDefaultImageInspector provides a new default inspector.
 func NewDefaultImageInspector(opts iicmd.ImageInspectorOptions) ImageInspector {
-	return &defaultImageInspector{opts,
-		*NewInspectorMetadata(&docker.Image{})}
+	inspector := &defaultImageInspector{
+		opts: opts,
+		meta: *iiapi.NewInspectorMetadata(&docker.Image{}),
+	}
+
+	// if serving then set up an image server
+	if len(opts.Serve) > 0 {
+		imageServerOpts := apiserver.ImageServerOptions{
+			ServePath:         opts.Serve,
+			HealthzURL:        HEALTHZ_URL_PATH,
+			APIURL:            API_URL_PREFIX,
+			APIVersions:       iiapi.APIVersions{Versions: []string{VERSION_TAG}},
+			MetadataURL:       METADATA_URL_PATH,
+			ContentURL:        CONTENT_URL_PREFIX,
+			ImageServeURL:     opts.DstPath,
+			ScanType:          opts.ScanType,
+			ScanReportURL:     OPENSCAP_URL_PATH,
+			HTMLScanReport:    opts.OpenScapHTML,
+			HTMLScanReportURL: OPENSCAP_REPORT_URL_PATH,
+		}
+		inspector.imageServer = apiserver.NewWebdavImageServer(imageServerOpts, opts.Chroot)
+	}
+	return inspector
 }
 
 // Inspect inspects and serves the image based on the ImageInspectorOptions.
@@ -87,8 +104,6 @@ func (i *defaultImageInspector) Inspect() error {
 	}
 	i.meta.Image = *imageMetadata
 
-	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
-
 	var scanReport []byte
 	var htmlScanReport []byte
 	if i.opts.ScanType == "openscap" {
@@ -101,80 +116,13 @@ func (i *defaultImageInspector) Inspect() error {
 			i.meta.OpenSCAP.SetError(err)
 			log.Printf("Unable to scan image: %v", err)
 		} else {
-			i.meta.OpenSCAP.Status = StatusSuccess
+			i.meta.OpenSCAP.Status = iiapi.StatusSuccess
 		}
 	}
 
-	if len(i.opts.Serve) > 0 {
-		servePath := i.opts.DstPath
-		if i.opts.Chroot {
-			if err := syscall.Chroot(i.opts.DstPath); err != nil {
-				return fmt.Errorf("Unable to chroot into %s: %v\n", i.opts.DstPath, err)
-			}
-			servePath = CHROOT_SERVE_PATH
-		} else {
-			log.Printf("!!!WARNING!!! It is insecure to serve the image content without changing")
-			log.Printf("root (--chroot). Absolute-path symlinks in the image can lead to disclose")
-			log.Printf("information of the hosting system.")
-		}
-
-		log.Printf("Serving image content %s on webdav://%s%s", i.opts.DstPath, i.opts.Serve, CONTENT_URL_PREFIX)
-
-		http.HandleFunc(HEALTHZ_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("ok\n"))
-		})
-
-		http.HandleFunc(API_URL_PREFIX, func(w http.ResponseWriter, r *http.Request) {
-			body, err := json.MarshalIndent(supportedVersions, "", "  ")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Write(body)
-		})
-
-		http.HandleFunc(METADATA_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
-			body, err := json.MarshalIndent(i.meta, "", "  ")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Write(body)
-		})
-
-		http.HandleFunc(OPENSCAP_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
-			if i.opts.ScanType == "openscap" && i.meta.OpenSCAP.Status == StatusSuccess {
-				w.Write(scanReport)
-			} else {
-				if i.meta.OpenSCAP.Status == StatusError {
-					http.Error(w, fmt.Sprintf("OpenSCAP Error: %s", i.meta.OpenSCAP.ErrorMessage),
-						http.StatusInternalServerError)
-				} else {
-					http.Error(w, "OpenSCAP option was not chosen", http.StatusNotFound)
-				}
-			}
-		})
-
-		http.HandleFunc(OPENSCAP_REPORT_URL_PATH, func(w http.ResponseWriter, r *http.Request) {
-			if i.opts.ScanType == "openscap" && i.meta.OpenSCAP.Status == StatusSuccess && i.opts.OpenScapHTML {
-				w.Write(htmlScanReport)
-			} else {
-				if i.meta.OpenSCAP.Status == StatusError {
-					http.Error(w, fmt.Sprintf("OpenSCAP Error: %s", i.meta.OpenSCAP.ErrorMessage),
-						http.StatusInternalServerError)
-				} else {
-					http.Error(w, "OpenSCAP option was not chosen", http.StatusNotFound)
-				}
-			}
-		})
-
-		http.Handle(CONTENT_URL_PREFIX, &webdav.Handler{
-			Prefix:     CONTENT_URL_PREFIX,
-			FileSystem: webdav.Dir(servePath),
-			LockSystem: webdav.NewMemLS(),
-		})
-
-		return http.ListenAndServe(i.opts.Serve, nil)
+	if i.imageServer != nil {
+		return i.imageServer.ServeImage(imageMetadata, &i.meta,
+			scanReport, htmlScanReport)
 	}
 	return nil
 }
