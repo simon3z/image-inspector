@@ -98,50 +98,11 @@ func (i *defaultImageInspector) Inspect() error {
 		return err
 	}
 
-	container, err := client.CreateContainer(docker.CreateContainerOptions{
-		Name: randomName,
-		Config: &docker.Config{
-			Image: i.opts.Image,
-			// For security purpose we don't define any entrypoint and command
-			Entrypoint: []string{""},
-			Cmd:        []string{""},
-		},
-	})
+	imageMetadata, err := i.createAndExtractImage(client, randomName)
 	if err != nil {
-		return fmt.Errorf("Unable to create docker container: %v\n", err)
-	}
-
-	containerMetadata, err := client.InspectContainer(container.ID)
-	if err != nil {
-		return fmt.Errorf("Unable to get docker container information: %v\n", err)
-	}
-
-	imageMetadata, err := client.InspectImage(containerMetadata.Image)
-	i.meta.Image = *imageMetadata
-	if err != nil {
-		return fmt.Errorf("Unable to get docker image information: %v\n", err)
-	}
-
-	if i.opts.DstPath, err = createOutputDir(i.opts.DstPath, "image-inspector-"); err != nil {
 		return err
 	}
-
-	reader, writer := io.Pipe()
-	go handleTarStream(reader, i.opts.DstPath)
-
-	log.Printf("Extracting image %s to %s", i.opts.Image, i.opts.DstPath)
-	err = client.CopyFromContainer(docker.CopyFromContainerOptions{
-		Container:    container.ID,
-		OutputStream: writer,
-		Resource:     "/",
-	})
-	if err != nil {
-		return fmt.Errorf("Unable to extract container: %v\n", err)
-	}
-
-	_ = client.RemoveContainer(docker.RemoveContainerOptions{
-		ID: container.ID,
-	})
+	i.meta.Image = *imageMetadata
 
 	supportedVersions := APIVersions{Versions: []string{VERSION_TAG}}
 
@@ -219,6 +180,62 @@ func (i *defaultImageInspector) Inspect() error {
 		return http.ListenAndServe(i.opts.Serve, nil)
 	}
 	return nil
+}
+
+// createAndExtractImage creates a docker container based on the option's image with containerName.
+// It will then insepct the container and image and then attempt to extract the image to
+// option's destination path.  If the destination path is empty it will write to a temp directory
+// and update the option's destination path with a /var/tmp directory.  /var/tmp is used to
+// try and ensure it is a non-in-memory tmpfs.
+func (i *defaultImageInspector) createAndExtractImage(client *docker.Client, containerName string) (*docker.Image, error) {
+	container, err := client.CreateContainer(docker.CreateContainerOptions{
+		Name: containerName,
+		Config: &docker.Config{
+			Image: i.opts.Image,
+			// For security purpose we don't define any entrypoint and command
+			Entrypoint: []string{""},
+			Cmd:        []string{""},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create docker container: %v\n", err)
+	}
+
+	// delete the container when we are done extracting it
+	defer func() {
+		client.RemoveContainer(docker.RemoveContainerOptions{
+			ID: container.ID,
+		})
+	}()
+
+	containerMetadata, err := client.InspectContainer(container.ID)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get docker container information: %v\n", err)
+	}
+
+	imageMetadata, err := client.InspectImage(containerMetadata.Image)
+	if err != nil {
+		return imageMetadata, fmt.Errorf("Unable to get docker image information: %v\n", err)
+	}
+
+	if i.opts.DstPath, err = createOutputDir(i.opts.DstPath, "image-inspector-"); err != nil {
+		return imageMetadata, err
+	}
+
+	reader, writer := io.Pipe()
+	go handleTarStream(reader, i.opts.DstPath)
+
+	log.Printf("Extracting image %s to %s", i.opts.Image, i.opts.DstPath)
+	err = client.CopyFromContainer(docker.CopyFromContainerOptions{
+		Container:    container.ID,
+		OutputStream: writer,
+		Resource:     "/",
+	})
+	if err != nil {
+		return imageMetadata, fmt.Errorf("Unable to extract container: %v\n", err)
+	}
+
+	return imageMetadata, nil
 }
 
 func handleTarStream(reader io.ReadCloser, destination string) {
