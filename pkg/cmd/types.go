@@ -24,6 +24,9 @@ type ImageInspectorOptions struct {
 	// PasswordFile is the location of the file containing the password for authentication to the
 	// docker registry.
 	PasswordFile string
+	// BearerToken is the token for authentication from the server
+	// When empty the authentication is not checked
+	BearerToken string
 }
 
 // NewDefaultImageInspectorOptions provides a new ImageInspectorOptions with default values.
@@ -37,6 +40,7 @@ func NewDefaultImageInspectorOptions() *ImageInspectorOptions {
 		DockerCfg:    "",
 		Username:     "",
 		PasswordFile: "",
+		BearerToken:  "",
 	}
 }
 

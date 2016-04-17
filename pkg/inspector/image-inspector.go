@@ -60,6 +60,7 @@ func NewDefaultImageInspector(opts iicmd.ImageInspectorOptions) ImageInspector {
 			MetadataURL:   METADATA_URL_PATH,
 			ContentURL:    CONTENT_URL_PREFIX,
 			ImageServeURL: opts.DstPath,
+			BearerToken:   opts.BearerToken,
 		}
 		inspector.imageServer = apiserver.NewWebdavImageServer(imageServerOpts, opts.Chroot)
 	}

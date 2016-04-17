@@ -34,4 +34,7 @@ type ImageServerOptions struct {
 	// NOTE: if the image server supports a chroot the server implementation will perform
 	// the chroot based on this URL.
 	ImageServeURL string
+	// BearerToken is the token for authentication from the server
+	// When empty the authentication is not checked
+	BearerToken string
 }

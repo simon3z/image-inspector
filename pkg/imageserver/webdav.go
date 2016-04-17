@@ -55,29 +55,55 @@ func (s *webdavImageServer) ServeImage(imageMetadata *docker.Image) error {
 		w.Write([]byte("ok\n"))
 	})
 
-	http.HandleFunc(s.opts.APIURL, func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(s.opts.APIURL, s.handlerFuncAuth(func(w http.ResponseWriter, r *http.Request) {
 		body, err := json.MarshalIndent(s.opts.APIVersions, "", "  ")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Write(body)
-	})
+	}))
 
-	http.HandleFunc(s.opts.MetadataURL, func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(s.opts.MetadataURL, s.handlerFuncAuth(func(w http.ResponseWriter, r *http.Request) {
 		body, err := json.MarshalIndent(imageMetadata, "", "  ")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Write(body)
-	})
+	}))
 
-	http.Handle(s.opts.ContentURL, &webdav.Handler{
+	http.Handle(s.opts.ContentURL, s.newAuthenticatedHandler(&webdav.Handler{
 		Prefix:     s.opts.ContentURL,
 		FileSystem: webdav.Dir(servePath),
 		LockSystem: webdav.NewMemLS(),
-	})
+	}))
 
 	return http.ListenAndServe(s.opts.ServePath, nil)
+}
+
+func (s *webdavImageServer) authenticate(r *http.Request) bool {
+	return len(s.opts.BearerToken) == 0 || r.Header.Get("Authorization") == s.opts.BearerToken
+}
+
+func (s *webdavImageServer) handlerFuncAuth(f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.authenticate(r) {
+			f(w, r)
+		} else {
+			http.Error(w, "Unauthorazied Access!", http.StatusForbidden)
+		}
+	}
+}
+
+type authenticatedHandler struct {
+	serveHttp func(http.ResponseWriter, *http.Request)
+}
+
+func (ah *authenticatedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ah.serveHttp(w, r)
+}
+
+func (s *webdavImageServer) newAuthenticatedHandler(h http.Handler) http.Handler {
+	return &authenticatedHandler{serveHttp: s.handlerFuncAuth(h.ServeHTTP)}
 }
