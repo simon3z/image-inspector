@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 
 	iicmd "github.com/simon3z/image-inspector/pkg/cmd"
@@ -19,6 +20,7 @@ func main() {
 	flag.StringVar(&inspectorOptions.DockerCfg, "dockercfg", inspectorOptions.DockerCfg, "Location of the docker configuration file")
 	flag.StringVar(&inspectorOptions.Username, "username", inspectorOptions.Username, "username for authenticating with the docker registry")
 	flag.StringVar(&inspectorOptions.PasswordFile, "password-file", inspectorOptions.PasswordFile, "Location of a file that contains the password for authentication with the docker registry")
+	flag.StringVar(&inspectorOptions.ServerAuthType, "server-auth-type", inspectorOptions.ServerAuthType, fmt.Sprintf("The type of authentication to be used with the image server, possible values are %v", iicmd.ServerAuthOptions))
 
 	flag.Parse()
 

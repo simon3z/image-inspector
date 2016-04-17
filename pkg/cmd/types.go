@@ -2,6 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	server "github.com/simon3z/image-inspector/pkg/imageserver"
+)
+
+var (
+	ServerAuthOptions = []string{
+		string(server.AllowAll),
+		string(server.KubernetesToken),
+	}
 )
 
 // ImageInspectorOptions is the main inspector implementation and holds the configuration
@@ -24,19 +32,22 @@ type ImageInspectorOptions struct {
 	// PasswordFile is the location of the file containing the password for authentication to the
 	// docker registry.
 	PasswordFile string
+	// ServerAuthType is the type of authentication used to access the server
+	ServerAuthType string
 }
 
 // NewDefaultImageInspectorOptions provides a new ImageInspectorOptions with default values.
 func NewDefaultImageInspectorOptions() *ImageInspectorOptions {
 	return &ImageInspectorOptions{
-		URI:          "unix:///var/run/docker.sock",
-		Image:        "",
-		DstPath:      "",
-		Serve:        "",
-		Chroot:       false,
-		DockerCfg:    "",
-		Username:     "",
-		PasswordFile: "",
+		URI:            "unix:///var/run/docker.sock",
+		Image:          "",
+		DstPath:        "",
+		Serve:          "",
+		Chroot:         false,
+		DockerCfg:      "",
+		Username:       "",
+		PasswordFile:   "",
+		ServerAuthType: "None",
 	}
 }
 
@@ -57,5 +68,17 @@ func (i *ImageInspectorOptions) Validate() error {
 	if len(i.Serve) == 0 && i.Chroot {
 		return fmt.Errorf("Change root can be used only when serving the image through webdav")
 	}
+	if !stringInSlice(i.ServerAuthType, ServerAuthOptions) {
+		return fmt.Errorf("server-auth-type can only be one of %v", ServerAuthOptions)
+	}
 	return nil
+}
+
+func stringInSlice(str string, list []string) bool {
+	for _, t := range list {
+		if t == str {
+			return true
+		}
+	}
+	return false
 }

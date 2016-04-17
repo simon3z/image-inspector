@@ -4,6 +4,13 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 )
 
+type AuthenticationType string
+
+const (
+	AllowAll        AuthenticationType = "None"
+	KubernetesToken AuthenticationType = "KubenetesToken"
+)
+
 // ImageServer abstracts the serving of image information.
 type ImageServer interface {
 	// ServeImage Serves the image
@@ -34,4 +41,6 @@ type ImageServerOptions struct {
 	// NOTE: if the image server supports a chroot the server implementation will perform
 	// the chroot based on this URL.
 	ImageServeURL string
+	// AuthType is the type of authentication used to access the server
+	AuthType AuthenticationType
 }
