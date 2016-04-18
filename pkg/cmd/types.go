@@ -2,6 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+)
+
+var (
+	ScanOptions = []string{"openscap"}
 )
 
 // ImageInspectorOptions is the main inspector implementation and holds the configuration
@@ -24,19 +29,25 @@ type ImageInspectorOptions struct {
 	// PasswordFile is the location of the file containing the password for authentication to the
 	// docker registry.
 	PasswordFile string
+	// ScanType is the type of the scan to be done on the inspected image
+	ScanType string
+	// ScanResultsDir is the directory that will contain the results of the scan
+	ScanResultsDir string
 }
 
 // NewDefaultImageInspectorOptions provides a new ImageInspectorOptions with default values.
 func NewDefaultImageInspectorOptions() *ImageInspectorOptions {
 	return &ImageInspectorOptions{
-		URI:          "unix:///var/run/docker.sock",
-		Image:        "",
-		DstPath:      "",
-		Serve:        "",
-		Chroot:       false,
-		DockerCfg:    "",
-		Username:     "",
-		PasswordFile: "",
+		URI:            "unix:///var/run/docker.sock",
+		Image:          "",
+		DstPath:        "",
+		Serve:          "",
+		Chroot:         false,
+		DockerCfg:      "",
+		Username:       "",
+		PasswordFile:   "",
+		ScanType:       "",
+		ScanResultsDir: "",
 	}
 }
 
@@ -56,6 +67,34 @@ func (i *ImageInspectorOptions) Validate() error {
 	}
 	if len(i.Serve) == 0 && i.Chroot {
 		return fmt.Errorf("Change root can be used only when serving the image through webdav")
+	}
+	if len(i.ScanResultsDir) > 0 && len(i.ScanType) == 0 {
+		return fmt.Errorf("scan-result-dir can be used only when spacifing scan-type")
+	}
+	if len(i.ScanResultsDir) > 0 {
+		fi, err := os.Stat(i.ScanResultsDir)
+		if err == nil && !fi.IsDir() {
+			return fmt.Errorf("%s is not a directory", i.ScanResultsDir)
+		}
+	}
+	for _, fl := range []string{i.DockerCfg, i.PasswordFile} {
+		if len(fl) > 0 {
+			if _, err := os.Stat(fl); os.IsNotExist(err) {
+				return fmt.Errorf("%s does not exists", fl)
+			}
+		}
+	}
+	if len(i.ScanType) > 0 {
+		var found bool = false
+		for _, opt := range ScanOptions {
+			if i.ScanType == opt {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("%s is not one of the available scan-type's which are %v", i.ScanType, ScanOptions)
+		}
 	}
 	return nil
 }
