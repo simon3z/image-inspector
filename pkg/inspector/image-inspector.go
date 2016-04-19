@@ -341,7 +341,7 @@ func (i *defaultImageInspector) scanImage(s openscap.Scanner) ([]byte, error) {
 
 func createOutputDir(dirName string, tempName string) (string, error) {
 	if len(dirName) > 0 {
-		err = os.Mkdir(dirName, 0755)
+		err := osMkdir(dirName, 0755)
 		if err != nil {
 			if !os.IsExist(err) {
 				return "", fmt.Errorf("Unable to create destination path: %v\n", err)
