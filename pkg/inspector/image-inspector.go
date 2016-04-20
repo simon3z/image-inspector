@@ -223,14 +223,30 @@ func (i *defaultImageInspector) createAndExtractImage(client *docker.Client, con
 	}
 
 	reader, writer := io.Pipe()
-	go handleTarStream(reader, i.opts.DstPath)
+	// handle closing the reader/writer in the method that creates them
+	defer writer.Close()
+	defer reader.Close()
 
 	log.Printf("Extracting image %s to %s", i.opts.Image, i.opts.DstPath)
-	err = client.CopyFromContainer(docker.CopyFromContainerOptions{
-		Container:    container.ID,
-		OutputStream: writer,
-		Resource:     "/",
-	})
+
+	// start the copy function first which will block after the first write while waiting for
+	// the reader to read.
+	errorChannel := make(chan error)
+	go func() {
+		errorChannel <- client.CopyFromContainer(docker.CopyFromContainerOptions{
+			Container:    container.ID,
+			OutputStream: writer,
+			Resource:     "/",
+		})
+	}()
+
+	// block on handling the reads here so we ensure both the write and the reader are finished
+	// (read waits until an EOF or error occurs).
+	handleTarStream(reader, i.opts.DstPath)
+
+	// capture any error from the copy, ensures both the handleTarStream and CopyFromContainer
+	// are done.
+	err = <-errorChannel
 	if err != nil {
 		return imageMetadata, fmt.Errorf("Unable to extract container: %v\n", err)
 	}
@@ -248,7 +264,6 @@ func handleTarStream(reader io.ReadCloser, destination string) {
 	} else {
 		log.Printf("Unable to create image tar reader")
 	}
-	reader.Close()
 }
 
 func processTarStream(tr *tar.Reader, destination string) error {
