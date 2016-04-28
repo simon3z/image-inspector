@@ -11,7 +11,7 @@ ADD .   $PKGPATH
 ENV GOBIN  /usr/bin
 ENV GOPATH /go:$PKGPATH/Godeps/_workspace
 
-RUN go install github.com/openshift/image-inspector && \
+RUN go install $PKGPATH/cmd/image-inspector.go && \
     mkdir -p /var/lib/image-inspector
 
 EXPOSE 8080

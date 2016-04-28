@@ -3,7 +3,7 @@ package inspector
 import (
 	"fmt"
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/simon3z/image-inspector/pkg/openscap"
+	"github.com/openshift/image-inspector/pkg/openscap"
 	"io/ioutil"
 	"os"
 	"testing"
