@@ -3,6 +3,7 @@ package inspector
 import (
 	"fmt"
 	docker "github.com/fsouza/go-dockerclient"
+	iicmd "github.com/openshift/image-inspector/pkg/cmd"
 	"github.com/openshift/image-inspector/pkg/openscap"
 	"io/ioutil"
 	"os"
@@ -61,7 +62,61 @@ func TestScanImage(t *testing.T) {
 				}
 			}
 		}
+	}
+}
 
+func TestGetAuthConfigs(t *testing.T) {
+	goodTwoDockerCfg := iicmd.NewDefaultImageInspectorOptions()
+	goodTwoDockerCfg.DockerCfg.Values = []string{"test/dockercfg1", "test/dockercfg2"}
+
+	goodUserAndPass := iicmd.NewDefaultImageInspectorOptions()
+	goodUserAndPass.Username = "erez"
+	goodUserAndPass.PasswordFile = "test/passwordFile1"
+
+	badDockerCfgMissing := iicmd.NewDefaultImageInspectorOptions()
+	badDockerCfgMissing.DockerCfg.Values = []string{"test/dockercfg1", "test/nosuchfile"}
+
+	badDockerCfgWrong := iicmd.NewDefaultImageInspectorOptions()
+	badDockerCfgWrong.DockerCfg.Values = []string{"test/dockercfg1", "test/passwordFile1"}
+
+	badDockerCfgNoAuth := iicmd.NewDefaultImageInspectorOptions()
+	badDockerCfgNoAuth.DockerCfg.Values = []string{"test/dockercfg1", "test/dockercfg3"}
+
+	tests := map[string]struct {
+		opts       *iicmd.ImageInspectorOptions
+		shouldFail bool
+	}{
+		"two dockercfg":              {opts: goodTwoDockerCfg, shouldFail: false},
+		"username and passwordFile":  {opts: goodUserAndPass, shouldFail: false},
+		"two dockercfg, one missing": {opts: badDockerCfgMissing, shouldFail: true},
+		"two dockercfg, one wrong":   {opts: badDockerCfgWrong, shouldFail: true},
+		"two dockercfg, no auth":     {opts: badDockerCfgNoAuth, shouldFail: true},
+	}
+
+	for k, v := range tests {
+		ii := &defaultImageInspector{*v.opts, InspectorMetadata{}}
+		auths, err := ii.getAuthConfigs()
+		if !v.shouldFail {
+			var expectedLength int = len(v.opts.DockerCfg.Values)
+			if len(v.opts.Username) > 0 {
+				expectedLength = expectedLength + 1
+			}
+			if err != nil {
+				t.Errorf("%s expected to validate but received %v", k, err)
+			}
+			var authsLen int = 0
+			if auths != nil {
+				authsLen = len(auths.Configs)
+			}
+			if auths == nil || expectedLength != authsLen {
+				t.Errorf("%s expected len to be %d but got %d from %v",
+					k, expectedLength, authsLen, auths)
+			}
+		} else {
+			if err == nil {
+				t.Errorf("%s should have failed be it didn't", k)
+			}
+		}
 	}
 }
 
