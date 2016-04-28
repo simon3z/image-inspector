@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	iicmd "github.com/simon3z/image-inspector/pkg/cmd"
-	ii "github.com/simon3z/image-inspector/pkg/inspector"
+	iicmd "github.com/openshift/image-inspector/pkg/cmd"
+	ii "github.com/openshift/image-inspector/pkg/inspector"
 )
 
 func main() {

@@ -18,10 +18,10 @@ import (
 	"crypto/rand"
 
 	docker "github.com/fsouza/go-dockerclient"
-	"github.com/simon3z/image-inspector/pkg/openscap"
+	"github.com/openshift/image-inspector/pkg/openscap"
 	"golang.org/x/net/webdav"
 
-	iicmd "github.com/simon3z/image-inspector/pkg/cmd"
+	iicmd "github.com/openshift/image-inspector/pkg/cmd"
 )
 
 type APIVersions struct {

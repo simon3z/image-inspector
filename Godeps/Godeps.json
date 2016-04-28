@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/simon3z/image-inspector",
+	"ImportPath": "github.com/openshift/image-inspector",
 	"GoVersion": "go1.4.2",
 	"Deps": [
 		{
