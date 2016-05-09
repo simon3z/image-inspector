@@ -3,6 +3,7 @@ package openscap
 import (
 	"fmt"
 	docker "github.com/fsouza/go-dockerclient"
+	util "github.com/openshift/image-inspector/pkg/util"
 	"io"
 	"net/http"
 	"net/url"
@@ -23,10 +24,13 @@ const (
 	Linux           = "Linux"
 	OpenSCAP        = "OpenSCAP"
 	ImageShortIDLen = 11
+	Unknown         = "Unknown"
+	LinuxVersionPH  = "Unknown"
 )
 
 var (
 	RHELDistNumbers = [...]int{5, 6, 7}
+	osSetEnv        = os.Setenv
 )
 
 // rhelDistFunc provides an injectable way to get the rhel dist for testing.
@@ -111,13 +115,14 @@ func (s *defaultOSCAPScanner) getInputCVE(dist int) (string, error) {
 
 func (s *defaultOSCAPScanner) setOscapChrootEnv() error {
 	for k, v := range map[string]string{
-		"OSCAP_PROBE_ROOT":              s.imageMountPath,
-		"OSCAP_PROBE_OS_VERSION":        "4.2.6-301.fc23.x86_64", // FIXME place holder value
-		"OSCAP_PROBE_ARCHITECTURE":      s.image.Config.Labels["Architecture"],
-		"OSCAP_PROBE_OS_NAME":           Linux,
-		"OSCAP_PROBE_PRIMARY_HOST_NAME": fmt.Sprintf("docker-image-%s", s.image.ID[:ImageShortIDLen]),
+		"OSCAP_PROBE_ROOT":         s.imageMountPath,
+		"OSCAP_PROBE_OS_VERSION":   LinuxVersionPH, // FIXME place holder value
+		"OSCAP_PROBE_ARCHITECTURE": util.StrOrDefault(s.image.Architecture, Unknown),
+		"OSCAP_PROBE_OS_NAME":      Linux,
+		"OSCAP_PROBE_PRIMARY_HOST_NAME": fmt.Sprintf("docker-image-%s",
+			s.image.ID[:util.Min(ImageShortIDLen, len(s.image.ID))]),
 	} {
-		err := os.Setenv(k, v)
+		err := osSetEnv(k, v)
 		if err != nil {
 			return err
 		}
