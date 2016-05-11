@@ -66,6 +66,8 @@ func TestScanImage(t *testing.T) {
 }
 
 func TestGetAuthConfigs(t *testing.T) {
+	goodNoAuth := iicmd.NewDefaultImageInspectorOptions()
+
 	goodTwoDockerCfg := iicmd.NewDefaultImageInspectorOptions()
 	goodTwoDockerCfg.DockerCfg.Values = []string{"test/dockercfg1", "test/dockercfg2"}
 
@@ -91,18 +93,19 @@ func TestGetAuthConfigs(t *testing.T) {
 		"two dockercfg, one missing": {opts: badDockerCfgMissing, shouldFail: true},
 		"two dockercfg, one wrong":   {opts: badDockerCfgWrong, shouldFail: true},
 		"two dockercfg, no auth":     {opts: badDockerCfgNoAuth, shouldFail: true},
+		"no auths, default expected": {opts: goodNoAuth, shouldFail: false},
 	}
 
 	for k, v := range tests {
 		ii := &defaultImageInspector{*v.opts, InspectorMetadata{}}
 		auths, err := ii.getAuthConfigs()
 		if !v.shouldFail {
-			var expectedLength int = len(v.opts.DockerCfg.Values)
+			var expectedLength int = len(v.opts.DockerCfg.Values) + 1
 			if len(v.opts.Username) > 0 {
-				expectedLength = expectedLength + 1
+				expectedLength = 1
 			}
 			if err != nil {
-				t.Errorf("%s expected to validate but received %v", k, err)
+				t.Errorf("%s expected to succeed but received %v", k, err)
 			}
 			var authsLen int = 0
 			if auths != nil {

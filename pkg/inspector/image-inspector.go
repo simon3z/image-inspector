@@ -351,7 +351,7 @@ func appendDockerCfgConfigs(dockercfg string, cfgs *docker.AuthConfigurations) e
 
 func (i *defaultImageInspector) getAuthConfigs() (*docker.AuthConfigurations, error) {
 	imagePullAuths := &docker.AuthConfigurations{
-		map[string]docker.AuthConfiguration{}}
+		map[string]docker.AuthConfiguration{"": {}}}
 	if len(i.opts.DockerCfg.Values) > 0 {
 		for _, dcfgFile := range i.opts.DockerCfg.Values {
 			if err := appendDockerCfgConfigs(dcfgFile, imagePullAuths); err != nil {
