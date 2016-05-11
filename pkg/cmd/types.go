@@ -94,7 +94,7 @@ func (i *ImageInspectorOptions) Validate() error {
 	for _, fl := range append(i.DockerCfg.Values, i.PasswordFile) {
 		if len(fl) > 0 {
 			if _, err := os.Stat(fl); os.IsNotExist(err) {
-				return fmt.Errorf("%s does not exists", fl)
+				return fmt.Errorf("%s does not exist", fl)
 			}
 		}
 	}
