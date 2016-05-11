@@ -107,7 +107,7 @@ func (i *ImageInspectorOptions) Validate() error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("%s is not one of the available scan-type's which are %v", i.ScanType, ScanOptions)
+			return fmt.Errorf("%s is not one of the available scan-types which are %v", i.ScanType, ScanOptions)
 		}
 	}
 	return nil
