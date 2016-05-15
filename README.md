@@ -1,3 +1,5 @@
+**Note:** on going development has been moved to [openshift/image-inspector](https://github.com/openshift/image-inspector)
+
 # Image Inspector
 
 Image Inspector can extract docker images to a target directory and
