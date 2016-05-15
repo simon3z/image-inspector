@@ -75,6 +75,10 @@ func TestGetAuthConfigs(t *testing.T) {
 	goodUserAndPass.Username = "erez"
 	goodUserAndPass.PasswordFile = "test/passwordFile1"
 
+	badUserAndPass := iicmd.NewDefaultImageInspectorOptions()
+	badUserAndPass.Username = "erez"
+	badUserAndPass.PasswordFile = "test/nosuchfile"
+
 	badDockerCfgMissing := iicmd.NewDefaultImageInspectorOptions()
 	badDockerCfgMissing.DockerCfg.Values = []string{"test/dockercfg1", "test/nosuchfile"}
 
@@ -85,25 +89,23 @@ func TestGetAuthConfigs(t *testing.T) {
 	badDockerCfgNoAuth.DockerCfg.Values = []string{"test/dockercfg1", "test/dockercfg3"}
 
 	tests := map[string]struct {
-		opts       *iicmd.ImageInspectorOptions
-		shouldFail bool
+		opts          *iicmd.ImageInspectorOptions
+		expectedAuths int
+		shouldFail    bool
 	}{
-		"two dockercfg":              {opts: goodTwoDockerCfg, shouldFail: false},
-		"username and passwordFile":  {opts: goodUserAndPass, shouldFail: false},
-		"two dockercfg, one missing": {opts: badDockerCfgMissing, shouldFail: true},
-		"two dockercfg, one wrong":   {opts: badDockerCfgWrong, shouldFail: true},
-		"two dockercfg, no auth":     {opts: badDockerCfgNoAuth, shouldFail: true},
-		"no auths, default expected": {opts: goodNoAuth, shouldFail: false},
+		"two dockercfg":               {opts: goodTwoDockerCfg, expectedAuths: 3, shouldFail: false},
+		"username and passwordFile":   {opts: goodUserAndPass, expectedAuths: 1, shouldFail: false},
+		"two dockercfg, one missing":  {opts: badDockerCfgMissing, expectedAuths: 2, shouldFail: false},
+		"two dockercfg, one wrong":    {opts: badDockerCfgWrong, expectedAuths: 2, shouldFail: false},
+		"two dockercfg, no auth":      {opts: badDockerCfgNoAuth, expectedAuths: 2, shouldFail: false},
+		"password file doens't exist": {opts: badUserAndPass, expectedAuths: 1, shouldFail: true},
+		"no auths, default expected":  {opts: goodNoAuth, expectedAuths: 1, shouldFail: false},
 	}
 
 	for k, v := range tests {
 		ii := &defaultImageInspector{*v.opts, InspectorMetadata{}}
 		auths, err := ii.getAuthConfigs()
 		if !v.shouldFail {
-			var expectedLength int = len(v.opts.DockerCfg.Values) + 1
-			if len(v.opts.Username) > 0 {
-				expectedLength = 1
-			}
 			if err != nil {
 				t.Errorf("%s expected to succeed but received %v", k, err)
 			}
@@ -111,9 +113,9 @@ func TestGetAuthConfigs(t *testing.T) {
 			if auths != nil {
 				authsLen = len(auths.Configs)
 			}
-			if auths == nil || expectedLength != authsLen {
+			if auths == nil || v.expectedAuths != authsLen {
 				t.Errorf("%s expected len to be %d but got %d from %v",
-					k, expectedLength, authsLen, auths)
+					k, v.expectedAuths, authsLen, auths)
 			}
 		} else {
 			if err == nil {
