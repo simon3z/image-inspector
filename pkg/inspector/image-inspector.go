@@ -336,6 +336,7 @@ func appendDockerCfgConfigs(dockercfg string, cfgs *docker.AuthConfigurations) e
 	if err != nil {
 		return fmt.Errorf("Unable to open docker config file: %v\n", err)
 	}
+	defer reader.Close()
 	if imagePullAuths, err = docker.NewAuthConfigurations(reader); err != nil {
 		return fmt.Errorf("Unable to parse docker config file: %v\n", err)
 	}
@@ -345,13 +346,12 @@ func appendDockerCfgConfigs(dockercfg string, cfgs *docker.AuthConfigurations) e
 	for name, ac := range imagePullAuths.Configs {
 		cfgs.Configs[fmt.Sprintf("%s/%s", dockercfg, name)] = ac
 	}
-	reader.Close()
 	return nil
 }
 
 func (i *defaultImageInspector) getAuthConfigs() (*docker.AuthConfigurations, error) {
 	imagePullAuths := &docker.AuthConfigurations{
-		map[string]docker.AuthConfiguration{}}
+		map[string]docker.AuthConfiguration{"": {}}}
 	if len(i.opts.DockerCfg.Values) > 0 {
 		for _, dcfgFile := range i.opts.DockerCfg.Values {
 			if err := appendDockerCfgConfigs(dcfgFile, imagePullAuths); err != nil {

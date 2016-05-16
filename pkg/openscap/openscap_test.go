@@ -157,3 +157,47 @@ func TestScan(t *testing.T) {
 	}
 
 }
+
+func notEmptyValue(k, v string) error {
+	if len(v) == 0 {
+		return fmt.Errorf("the value should'nt be empty for key %s", k)
+	}
+	return nil
+}
+
+func TestSetOscapChrootEnv(t *testing.T) {
+	oldSetVar := osSetEnv
+	defer func() { osSetEnv = oldSetVar }()
+
+	okImage := docker.Image{}
+	okImage.Architecture = "x86_64"
+	okImage.ID = "12345678901234567890"
+	tsGoodImage := &defaultOSCAPScanner{image: &okImage, imageMountPath: "."}
+
+	noArchImage := okImage
+	noArchImage.Architecture = ""
+	tsNoArch := &defaultOSCAPScanner{image: &noArchImage, imageMountPath: "."}
+
+	shortIDImage := okImage
+	shortIDImage.ID = "1234"
+	tsShortID := &defaultOSCAPScanner{image: &shortIDImage, imageMountPath: "."}
+
+	noIDImage := okImage
+	noIDImage.ID = ""
+	tsNoID := &defaultOSCAPScanner{image: &noIDImage, imageMountPath: "."}
+
+	for k, v := range map[string]struct {
+		ts *defaultOSCAPScanner
+	}{
+		"sanity check":       {ts: tsGoodImage},
+		"no architecture":    {ts: tsNoArch},
+		"short image ID":     {ts: tsShortID},
+		"no image ID at all": {ts: tsNoID},
+	} {
+		osSetEnv = notEmptyValue
+		err := v.ts.setOscapChrootEnv()
+		if err != nil {
+			t.Errorf("%s failed but shouldn't have. The error is %v", k, err)
+		}
+	}
+}
