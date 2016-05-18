@@ -355,7 +355,7 @@ func (i *defaultImageInspector) getAuthConfigs() (*docker.AuthConfigurations, er
 	if len(i.opts.DockerCfg.Values) > 0 {
 		for _, dcfgFile := range i.opts.DockerCfg.Values {
 			if err := appendDockerCfgConfigs(dcfgFile, imagePullAuths); err != nil {
-				return nil, err
+				log.Printf("WARNING: Unable to read docker configuration from %s. Error: %v", dcfgFile, err)
 			}
 		}
 	}
