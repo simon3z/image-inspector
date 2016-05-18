@@ -13,6 +13,12 @@ const (
 	StatusNotRequested OpenSCAPStatus = "NotRequested"
 	StatusSuccess      OpenSCAPStatus = "Success"
 	StatusError        OpenSCAPStatus = "Error"
+	// PullAlways means that image-inspector always attempts to pull the latest image.  Inspection will fail If the pull fails.
+	PullAlways string = "always"
+	// PullNever means that image-inspector never pulls an image, but only uses a local image.  Inspection will fail if the image isn't present
+	PullNever string = "never"
+	// PullIfNotPresent means that image-inspector pulls if the image isn't present on disk. Inspection will fail if the image isn't present and the pull fails.
+	PullIfNotPresent string = "when-missing"
 )
 
 // The default version for the result API object
@@ -78,7 +84,8 @@ func (osm *OpenSCAPMetadata) SetError(err error) {
 }
 
 var (
-	ScanOptions = []string{"openscap", "clamav"}
+	ScanOptions       = []string{"openscap", "clamav"}
+	PullPolicyOptions = []string{PullAlways, PullNever, PullIfNotPresent}
 )
 
 // InspectorMetadata is the metadata type with information about image-inspector's operation

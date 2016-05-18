@@ -21,3 +21,12 @@ func TestMin(t *testing.T) {
 		t.Errorf("should return 2")
 	}
 }
+
+func TestStringInList(t *testing.T) {
+	if !StringInList("one", []string{"three", "two", "one"}) {
+		t.Errorf("should be in the list")
+	}
+	if StringInList("four", []string{"three", "two", "one"}) {
+		t.Errorf("Is not found in the list")
+	}
+}

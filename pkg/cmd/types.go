@@ -7,6 +7,7 @@ import (
 
 	iiapi "github.com/openshift/image-inspector/pkg/api"
 
+	util "github.com/openshift/image-inspector/pkg/util"
 	"os"
 )
 
@@ -67,10 +68,11 @@ type ImageInspectorOptions struct {
 	// AuthToken is a Shared Secret used to validate HTTP Requests.
 	// AuthToken can be set through AuthTokenFile or ENV
 	AuthToken string
-
 	// AuthTokenFile is the path to a file containing the AuthToken
 	// If it is not provided, the AuthToken will be read from the ENV
 	AuthTokenFile string
+	// PullPolicy controls whether we try to pull the inspected image
+	PullPolicy string
 }
 
 // NewDefaultImageInspectorOptions provides a new ImageInspectorOptions with default values.
@@ -79,6 +81,7 @@ func NewDefaultImageInspectorOptions() *ImageInspectorOptions {
 		URI:        DefaultDockerSocketLocation,
 		DockerCfg:  MultiStringVar{[]string{}},
 		CVEUrlPath: oscapscanner.CVEUrl,
+		PullPolicy: iiapi.PullIfNotPresent,
 	}
 }
 
@@ -122,14 +125,7 @@ func (i *ImageInspectorOptions) Validate() error {
 		}
 	}
 	if len(i.ScanType) > 0 {
-		var found bool = false
-		for _, opt := range iiapi.ScanOptions {
-			if i.ScanType == opt {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !util.StringInList(i.ScanType, iiapi.ScanOptions) {
 			return fmt.Errorf("%s is not one of the available scan-types which are %v",
 				i.ScanType, iiapi.ScanOptions)
 		}
@@ -139,17 +135,14 @@ func (i *ImageInspectorOptions) Validate() error {
 	}
 
 	// A valid scan-type must be specified.
-	var found bool = false
-	for _, opt := range iiapi.ScanOptions {
-		if i.ScanType == opt {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !util.StringInList(i.ScanType, iiapi.ScanOptions) {
 		return fmt.Errorf("%s is not one of the available scan-types which are %v",
 			i.ScanType, iiapi.ScanOptions)
 	}
+	if !util.StringInList(i.PullPolicy, iiapi.PullPolicyOptions) {
+		return fmt.Errorf("%s is not one of the available pull-policy options which are %v",
+			i.PullPolicy, iiapi.PullPolicyOptions)
 
+	}
 	return nil
 }
