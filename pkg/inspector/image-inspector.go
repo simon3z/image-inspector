@@ -113,7 +113,7 @@ func (i *defaultImageInspector) Inspect() error {
 		if i.opts.ScanResultsDir, err = createOutputDir(i.opts.ScanResultsDir, "image-inspector-scan-results-"); err != nil {
 			return err
 		}
-		scanner := openscap.NewDefaultScanner(OSCAP_CVE_DIR, i.opts.ScanResultsDir, i.opts.OpenScapHTML)
+		scanner := openscap.NewDefaultScanner(OSCAP_CVE_DIR, i.opts.ScanResultsDir, i.opts.CVEUrlPath, i.opts.OpenScapHTML)
 		scanReport, htmlScanReport, err = i.scanImage(scanner)
 		if err != nil {
 			i.meta.OpenSCAP.SetError(err)

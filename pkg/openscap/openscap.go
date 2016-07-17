@@ -52,6 +52,8 @@ type defaultOSCAPScanner struct {
 	CVEDir string
 	// ResultsDir is the directory to which the arf report will be written
 	ResultsDir string
+	// CVEUrlAltPath An alternative source for the cve files
+	CVEUrlAltPath string
 
 	// Image is the metadata of the inspected image
 	image *docker.Image
@@ -68,11 +70,12 @@ type defaultOSCAPScanner struct {
 }
 
 // NewDefaultScanner returns a new OpenSCAP scanner
-func NewDefaultScanner(cveDir string, resultsDir string, html bool) Scanner {
+func NewDefaultScanner(cveDir, resultsDir, CVEUrlAltPath string, html bool) Scanner {
 	scanner := &defaultOSCAPScanner{
-		CVEDir:     cveDir,
-		ResultsDir: resultsDir,
-		HTML:       html,
+		CVEDir:        cveDir,
+		ResultsDir:    resultsDir,
+		CVEUrlAltPath: CVEUrlAltPath,
+		HTML:          html,
 	}
 
 	scanner.rhelDist = scanner.getRHELDist
@@ -100,7 +103,16 @@ func (s *defaultOSCAPScanner) getRHELDist() (int, error) {
 func (s *defaultOSCAPScanner) getInputCVE(dist int) (string, error) {
 	cveName := fmt.Sprintf(DistCVENameFmt, dist)
 	cveFileName := path.Join(s.CVEDir, cveName)
-	cveURL, _ := url.Parse(CVEUrl)
+	var err error
+	var cveURL *url.URL
+	if len(s.CVEUrlAltPath) > 0 {
+		if cveURL, err = url.Parse(s.CVEUrlAltPath); err != nil {
+			return "", fmt.Errorf("Could not parse CVE URL %s: %v\n",
+				s.CVEUrlAltPath, err)
+		}
+	} else {
+		cveURL, _ = url.Parse(CVEUrl)
+	}
 	cveURL.Path = path.Join(cveURL.Path, cveName)
 
 	out, err := os.Create(cveFileName)

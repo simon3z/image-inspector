@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	oscapscanner "github.com/openshift/image-inspector/pkg/openscap"
 	"os"
 )
 
@@ -49,6 +50,8 @@ type ImageInspectorOptions struct {
 	ScanResultsDir string
 	// OpenScapHTML controls whether or not to generate an HTML report
 	OpenScapHTML bool
+	// CVEUrlPath An alternative source for the cve files
+	CVEUrlPath string
 }
 
 // NewDefaultImageInspectorOptions provides a new ImageInspectorOptions with default values.
@@ -65,6 +68,7 @@ func NewDefaultImageInspectorOptions() *ImageInspectorOptions {
 		ScanType:       "",
 		ScanResultsDir: "",
 		OpenScapHTML:   false,
+		CVEUrlPath:     oscapscanner.CVEUrl,
 	}
 }
 
