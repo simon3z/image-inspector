@@ -45,4 +45,4 @@ To build image-inspector using godep:
     $ docker run -ti --rm --privileged -p 8080:8080 \
       -v /var/run/docker.sock:/var/run/docker.sock \
       openshift/image-inspector --image=fedora:20 \
-      --path=/tmp/image-content --serve 0.0.0.:8080
+      --path=/tmp/image-content --serve 0.0.0.0:8080
