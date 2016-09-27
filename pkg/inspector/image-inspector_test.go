@@ -9,10 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-
-	docker "github.com/fsouza/go-dockerclient"
-	iicmd "github.com/openshift/image-inspector/pkg/cmd"
-	"github.com/openshift/image-inspector/pkg/openscap"
 )
 
 type FailMockScanner struct{}
@@ -49,15 +45,6 @@ func (ms *SuccMockScanner) Scan(string, *docker.Image) error {
 
 func (ms *NoResMockScanner) ResultsFileName() string {
 	return "NoSuchFILE"
-}
-
-type MockImageServer struct{}
-
-func (mis *MockImageServer) ServeImage(imageMetadata *docker.Image,
-	meta *iiapi.InspectorMetadata,
-	scanReport []byte,
-	htmlScanReport []byte) error {
-	return nil
 }
 
 func TestScanImage(t *testing.T) {
@@ -156,7 +143,7 @@ func TestGetAuthConfigs(t *testing.T) {
 	}
 
 	for k, v := range tests {
-		ii := &defaultImageInspector{*v.opts, iiapi.InspectorMetadata{}, &MockImageServer{}}
+		ii := &defaultImageInspector{*v.opts, iiapi.InspectorMetadata{}, nil}
 		auths, err := ii.getAuthConfigs()
 		if !v.shouldFail {
 			if err != nil {

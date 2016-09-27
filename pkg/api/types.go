@@ -14,13 +14,13 @@ const (
 	StatusError        OpenSCAPStatus = "Error"
 )
 
-type openSCAPMetadata struct {
+type OpenSCAPMetadata struct {
 	Status           OpenSCAPStatus // Status of the OpenSCAP scan report
 	ErrorMessage     string         // Error message from the openscap
 	ContentTimeStamp string         // Timestamp for this data
 }
 
-func (osm *openSCAPMetadata) SetError(err error) {
+func (osm *OpenSCAPMetadata) SetError(err error) {
 	osm.Status = StatusError
 	osm.ErrorMessage = err.Error()
 	osm.ContentTimeStamp = string(time.Now().Format(time.RFC850))
@@ -33,21 +33,8 @@ var (
 // InspectorMetadata is the metadata type with information about image-inspector's operation
 type InspectorMetadata struct {
 	docker.Image // Metadata about the inspected image
-
-	OpenSCAP *openSCAPMetadata
-}
-
-// NewInspectorMetadata returns a new InspectorMetadata out of *docker.Image
-// The OpenSCAP status will be NotRequested
-func NewInspectorMetadata(imageMetadata *docker.Image) *InspectorMetadata {
-	return &InspectorMetadata{
-		Image: *imageMetadata,
-		OpenSCAP: &openSCAPMetadata{
-			Status:           StatusNotRequested,
-			ErrorMessage:     "",
-			ContentTimeStamp: string(time.Now().Format(time.RFC850)),
-		},
-	}
+	// OpenSCAP describes the state of the OpenSCAP scan
+	OpenSCAP *OpenSCAPMetadata
 }
 
 // APIVersions holds a slice of supported API versions.

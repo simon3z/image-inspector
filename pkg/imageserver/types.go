@@ -1,15 +1,13 @@
 package imageserver
 
 import (
-	docker "github.com/fsouza/go-dockerclient"
 	iiapi "github.com/openshift/image-inspector/pkg/api"
 )
 
 // ImageServer abstracts the serving of image information.
 type ImageServer interface {
 	// ServeImage Serves the image
-	ServeImage(imageMetadata *docker.Image,
-		meta *iiapi.InspectorMetadata,
+	ServeImage(meta *iiapi.InspectorMetadata,
 		scanReport []byte,
 		htmlScanReport []byte) error
 }

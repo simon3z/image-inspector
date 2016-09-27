@@ -9,7 +9,6 @@ import (
 
 	"golang.org/x/net/webdav"
 
-	docker "github.com/fsouza/go-dockerclient"
 	iiapi "github.com/openshift/image-inspector/pkg/api"
 )
 
@@ -37,8 +36,7 @@ func NewWebdavImageServer(opts ImageServerOptions, chroot bool) ImageServer {
 }
 
 // ServeImage Serves the image.
-func (s *webdavImageServer) ServeImage(imageMetadata *docker.Image,
-	meta *iiapi.InspectorMetadata,
+func (s *webdavImageServer) ServeImage(meta *iiapi.InspectorMetadata,
 	scanReport []byte,
 	htmlScanReport []byte) error {
 

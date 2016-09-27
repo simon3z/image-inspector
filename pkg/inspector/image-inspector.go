@@ -1,6 +1,7 @@
 package inspector
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"archive/tar"
 	"crypto/rand"
@@ -55,11 +57,24 @@ type defaultImageInspector struct {
 	imageServer apiserver.ImageServer
 }
 
+// NewInspectorMetadata returns a new InspectorMetadata out of *docker.Image
+// The OpenSCAP status will be NotRequested
+func NewInspectorMetadata(imageMetadata *docker.Image) iiapi.InspectorMetadata {
+	return iiapi.InspectorMetadata{
+		Image: *imageMetadata,
+		OpenSCAP: &iiapi.OpenSCAPMetadata{
+			Status:           iiapi.StatusNotRequested,
+			ErrorMessage:     "",
+			ContentTimeStamp: string(time.Now().Format(time.RFC850)),
+		},
+	}
+}
+
 // NewDefaultImageInspector provides a new default inspector.
 func NewDefaultImageInspector(opts iicmd.ImageInspectorOptions) ImageInspector {
 	inspector := &defaultImageInspector{
 		opts: opts,
-		meta: *iiapi.NewInspectorMetadata(&docker.Image{}),
+		meta: NewInspectorMetadata(&docker.Image{}),
 	}
 
 	// if serving then set up an image server
@@ -121,7 +136,7 @@ func (i *defaultImageInspector) Inspect() error {
 	}
 
 	if i.imageServer != nil {
-		return i.imageServer.ServeImage(imageMetadata, &i.meta,
+		return i.imageServer.ServeImage(&i.meta,
 			scanReport, htmlScanReport)
 	}
 	return nil
