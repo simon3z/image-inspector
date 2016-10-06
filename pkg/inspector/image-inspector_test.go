@@ -2,12 +2,13 @@ package inspector
 
 import (
 	"fmt"
-	docker "github.com/fsouza/go-dockerclient"
-	iicmd "github.com/openshift/image-inspector/pkg/cmd"
-	"github.com/openshift/image-inspector/pkg/openscap"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	docker "github.com/fsouza/go-dockerclient"
+	iicmd "github.com/openshift/image-inspector/pkg/cmd"
+	"github.com/openshift/image-inspector/pkg/openscap"
 )
 
 type FailMockScanner struct{}
@@ -60,12 +61,32 @@ func TestScanImage(t *testing.T) {
 				t.Errorf("%s should have succeeded but failed with %v", k, err)
 			} else {
 				resultFileContent, err := ioutil.ReadFile(v.s.ResultsFileName())
-				if string(resultFileContent) != string(report) {
-					t.Errorf("%s returned wrong results", k, err)
+				if err != nil {
+					t.Errorf("%s should have been able to read the"+
+						"results file but failed with: %v", k, err)
 				}
-				htmlResultFileContent, err := ioutil.ReadFile(v.s.HTMLResultsFileName())
-				if string(htmlResultFileContent) != string(htmlReport) {
-					t.Errorf("%s returned wrong html results", k, err)
+				if string(resultFileContent) != string(report) {
+					t.Errorf("%s The report on disk did not match the "+
+						"report from the scanImage: %v", k, err)
+					t.Errorf("%s -- The result string read from the "+
+						"file is %d characters long.", k, len(resultFileContent))
+					t.Errorf("%s -- The result string as read via the "+
+						"scan is %d characters long.", k, len(report))
+				}
+				if ii.opts.OpenScapHTML {
+					htmlResultFileContent, err := ioutil.ReadFile(v.s.HTMLResultsFileName())
+					if err != nil {
+						t.Errorf("%s should have been able to read the"+
+							"HTML results file but failed with: %v", k, err)
+					}
+					if string(htmlResultFileContent) != string(htmlReport) {
+						t.Errorf("%s The HTML report on disk did not match the "+
+							"report from the scanImage: %v", k, err)
+						t.Errorf("%s -- The result string read from the "+
+							"file is %d characters long.", k, len(htmlResultFileContent))
+						t.Errorf("%s -- The result string as read via the "+
+							"scan is %d characters long.", k, len(htmlReport))
+					}
 				}
 			}
 		}

@@ -390,6 +390,7 @@ func (i *defaultImageInspector) getAuthConfigs() (*docker.AuthConfigurations, er
 func (i *defaultImageInspector) scanImage(s openscap.Scanner) ([]byte, []byte, error) {
 	log.Printf("%s scanning %s. Placing results in %s",
 		s.ScannerName(), i.opts.DstPath, i.opts.ScanResultsDir)
+	var htmlScanReport []byte
 	err := s.Scan(i.opts.DstPath, &i.meta.Image)
 	if err != nil {
 		return []byte(""), []byte(""), fmt.Errorf("Unable to run %s: %v\n", s.ScannerName(), err)
@@ -399,9 +400,11 @@ func (i *defaultImageInspector) scanImage(s openscap.Scanner) ([]byte, []byte, e
 		return []byte(""), []byte(""), fmt.Errorf("Unable to read %s result file: %v\n", s.ScannerName(), err)
 	}
 
-	htmlScanReport, err := ioutil.ReadFile(s.HTMLResultsFileName())
-	if err != nil {
-		return []byte(""), []byte(""), fmt.Errorf("Unable to read %s HTML result file: %v\n", s.ScannerName(), err)
+	if i.opts.OpenScapHTML {
+		htmlScanReport, err = ioutil.ReadFile(s.HTMLResultsFileName())
+		if err != nil {
+			return []byte(""), []byte(""), fmt.Errorf("Unable to read %s HTML result file: %v\n", s.ScannerName(), err)
+		}
 	}
 
 	return scanReport, htmlScanReport, nil
