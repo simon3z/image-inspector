@@ -27,6 +27,9 @@ func (ms *FailMockScanner) ScannerName() string {
 func (ms *FailMockScanner) ResultsFileName() string {
 	return "image-inspector_test.go"
 }
+func (ms *FailMockScanner) HTMLResultsFileName() string {
+	return "image-inspector_test.go"
+}
 
 func (ms *SuccMockScanner) Scan(string, *docker.Image) error {
 	return nil
@@ -48,7 +51,7 @@ func TestScanImage(t *testing.T) {
 	} {
 		ii := defaultImageInspector{}
 		ii.opts.DstPath = "here"
-		report, err := ii.scanImage(v.s)
+		report, htmlReport, err := ii.scanImage(v.s)
 		if v.shouldFail && err == nil {
 			t.Errorf("%s should have failed but it didn't!", k)
 		}
@@ -58,7 +61,11 @@ func TestScanImage(t *testing.T) {
 			} else {
 				resultFileContent, err := ioutil.ReadFile(v.s.ResultsFileName())
 				if string(resultFileContent) != string(report) {
-					t.Errorf("%s should have succeeded but failed with %v", k, err)
+					t.Errorf("%s returned wrong results", k, err)
+				}
+				htmlResultFileContent, err := ioutil.ReadFile(v.s.HTMLResultsFileName())
+				if string(htmlResultFileContent) != string(htmlReport) {
+					t.Errorf("%s returned wrong html results", k, err)
 				}
 			}
 		}
