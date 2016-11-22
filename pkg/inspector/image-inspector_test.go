@@ -17,6 +17,9 @@ type SuccMockScanner struct {
 type NoResMockScanner struct {
 	SuccMockScanner
 }
+type SuccWithHTMLMockScanner struct {
+	SuccMockScanner
+}
 
 func (ms *FailMockScanner) Scan(string, *docker.Image) error {
 	return fmt.Errorf("FAIL SCANNER!")
@@ -28,7 +31,11 @@ func (ms *FailMockScanner) ResultsFileName() string {
 	return "image-inspector_test.go"
 }
 func (ms *FailMockScanner) HTMLResultsFileName() string {
-	return "image-inspector_test.go"
+	return "NoSuchFile"
+}
+
+func (ms *SuccWithHTMLMockScanner) HTMLResultsFileName() string {
+	return "image-inpector_test.go"
 }
 
 func (ms *SuccMockScanner) Scan(string, *docker.Image) error {
@@ -40,17 +47,22 @@ func (ms *NoResMockScanner) ResultsFileName() string {
 }
 
 func TestScanImage(t *testing.T) {
+	iiWithHtml := defaultImageInspector{}
+	iiWithHtml.opts.OpenScapHTML = true
 
 	for k, v := range map[string]struct {
+		ii         defaultImageInspector
 		s          openscap.Scanner
 		shouldFail bool
 	}{
-		"Scanner fails on scan":       {s: &FailMockScanner{}, shouldFail: true},
-		"Results file does not exist": {s: &NoResMockScanner{}, shouldFail: true},
-		"Happy Flow":                  {s: &SuccMockScanner{}, shouldFail: false},
+		"Scanner fails on scan":       {ii: defaultImageInspector{}, s: &FailMockScanner{}, shouldFail: true},
+		"Results file does not exist": {ii: defaultImageInspector{}, s: &NoResMockScanner{}, shouldFail: true},
+		"Happy Flow":                  {ii: defaultImageInspector{}, s: &SuccMockScanner{}, shouldFail: false},
+		"can't read html report":      {ii: iiWithHtml, s: &SuccMockScanner{}, shouldFail: true},
+		"Happy Flow with html":        {ii: iiWithHtml, s: &SuccWithHTMLMockScanner{}, shouldFail: true},
 	} {
-		ii := defaultImageInspector{}
-		ii.opts.DstPath = "here"
+		v.ii.opts.DstPath = "here"
+		ii := &v.ii
 		report, htmlReport, err := ii.scanImage(v.s)
 		if v.shouldFail && err == nil {
 			t.Errorf("%s should have failed but it didn't!", k)
