@@ -13,6 +13,7 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"time"
 
 	"archive/tar"
 	"crypto/rand"
@@ -40,6 +41,7 @@ const (
 	OPENSCAP_REPORT_URL_PATH = API_URL_PREFIX + "/" + VERSION_TAG + "/openscap-report"
 	CHROOT_SERVE_PATH        = "/"
 	OSCAP_CVE_DIR            = "/tmp"
+	PULL_LOG_INTERVAL_SEC    = 10
 )
 
 var osMkdir = os.Mkdir
@@ -70,28 +72,8 @@ func (i *defaultImageInspector) Inspect() error {
 		return fmt.Errorf("Unable to connect to docker daemon: %v\n", err)
 	}
 
-	if _, err := client.InspectImage(i.opts.Image); err != nil {
-		log.Printf("Pulling image %s", i.opts.Image)
-		imagePullOption := docker.PullImageOptions{Repository: i.opts.Image}
-
-		var imagePullAuths *docker.AuthConfigurations
-		var authCfgErr error
-		if imagePullAuths, authCfgErr = i.getAuthConfigs(); authCfgErr != nil {
-			return authCfgErr
-		}
-
-		// Try all the possible auth's from the config file
-		var authErr error
-		for _, auth := range imagePullAuths.Configs {
-			if authErr = client.PullImage(imagePullOption, auth); authErr == nil {
-				break
-			}
-		}
-		if authErr != nil {
-			return fmt.Errorf("Unable to pull docker image: %v\n", authErr)
-		}
-	} else {
-		log.Printf("Image %s is available, skipping image pull", i.opts.Image)
+	if err = i.pullImage(client); err != nil {
+		return err
 	}
 
 	randomName, err := generateRandomName()
@@ -195,6 +177,99 @@ func (i *defaultImageInspector) Inspect() error {
 		return http.ListenAndServe(i.opts.Serve, nil)
 	}
 	return nil
+}
+
+// aggregateBytesAndReport sums the numbers recieved from its input channel
+// bytesChan and prints them to the log every PULL_LOG_INTERVAL_SEC seconds.
+// It will exit after bytesChan is closed.
+func aggregateBytesAndReport(bytesChan chan int) {
+	var bytesDownloaded int = 0
+	ticker := time.NewTicker(PULL_LOG_INTERVAL_SEC * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case bytes, open := <-bytesChan:
+			if !open {
+				log.Printf("Finished Downloading Image (%dKb downloaded)", bytesDownloaded/1024)
+				return
+			}
+			bytesDownloaded += bytes
+		case <-ticker.C:
+			log.Printf("Downloading Image (%dKb downloaded)", bytesDownloaded/1024)
+		}
+	}
+}
+
+// decodeDockerPullMessages will parse the docker pull messages received
+// from reader and will push the difference of bytes downloaded to
+// bytesChan. After reader is closed it will close bytesChan and exit.
+func decodeDockerPullMessages(bytesChan chan int, reader io.Reader) {
+	type progressDetailType struct {
+		Current, Total int
+	}
+	type pullMessage struct {
+		Status, Id     string
+		ProgressDetail progressDetailType
+	}
+	defer func() { close(bytesChan) }()           // Closing the channel to end the other routine
+	layersBytesDownloaded := make(map[string]int) // bytes downloaded per layer
+	dec := json.NewDecoder(reader)                // decoder for the json messages
+	for {
+		var v pullMessage
+		if err := dec.Decode(&v); err != nil {
+			if err != io.ErrClosedPipe {
+				log.Printf("Error decoding json: %v", err)
+			}
+			break
+		}
+		// decoding
+		if v.Status == "Downloading" {
+			bytes := v.ProgressDetail.Current
+			last, existed := layersBytesDownloaded[v.Id]
+			if !existed {
+				last = 0
+			}
+			layersBytesDownloaded[v.Id] = bytes
+			bytesChan <- (bytes - last)
+		}
+	}
+}
+
+// pullImage pulls the inspected image using the given client.
+// It will try to use all the given authentication methods and will fail
+// only if all of them failed.
+func (i *defaultImageInspector) pullImage(client *docker.Client) error {
+	log.Printf("Pulling image %s", i.opts.Image)
+
+	var imagePullAuths *docker.AuthConfigurations
+	var authCfgErr error
+	if imagePullAuths, authCfgErr = i.getAuthConfigs(); authCfgErr != nil {
+		return authCfgErr
+	}
+
+	reader, writer := io.Pipe()
+	// handle closing the reader/writer in the method that creates them
+	defer writer.Close()
+	defer reader.Close()
+	imagePullOption := docker.PullImageOptions{
+		Repository:    i.opts.Image,
+		OutputStream:  writer,
+		RawJSONStream: true,
+	}
+
+	bytesChan := make(chan int)
+	go aggregateBytesAndReport(bytesChan)
+	go decodeDockerPullMessages(bytesChan, reader)
+
+	// Try all the possible auth's from the config file
+	var authErr error
+	for name, auth := range imagePullAuths.Configs {
+		if authErr = client.PullImage(imagePullOption, auth); authErr == nil {
+			return nil
+		}
+		log.Printf("Authentication with %s failed: %v", name, authErr)
+	}
+	return fmt.Errorf("Unable to pull docker image: %v\n", authErr)
 }
 
 // createAndExtractImage creates a docker container based on the option's image with containerName.
@@ -366,7 +441,7 @@ func appendDockerCfgConfigs(dockercfg string, cfgs *docker.AuthConfigurations) e
 
 func (i *defaultImageInspector) getAuthConfigs() (*docker.AuthConfigurations, error) {
 	imagePullAuths := &docker.AuthConfigurations{
-		map[string]docker.AuthConfiguration{"": {}}}
+		map[string]docker.AuthConfiguration{"Default Empty Authentication": {}}}
 	if len(i.opts.DockerCfg.Values) > 0 {
 		for _, dcfgFile := range i.opts.DockerCfg.Values {
 			if err := appendDockerCfgConfigs(dcfgFile, imagePullAuths); err != nil {
