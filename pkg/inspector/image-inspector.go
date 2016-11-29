@@ -323,11 +323,12 @@ func (i *defaultImageInspector) createAndExtractImage(client *docker.Client, con
 	// the reader to read.
 	errorChannel := make(chan error)
 	go func() {
-		errorChannel <- client.CopyFromContainer(docker.CopyFromContainerOptions{
-			Container:    container.ID,
-			OutputStream: writer,
-			Resource:     "/",
-		})
+		errorChannel <- client.DownloadFromContainer(
+			container.ID,
+			docker.DownloadFromContainerOptions{
+				OutputStream: writer,
+				Path:         "/",
+			})
 	}()
 
 	// block on handling the reads here so we ensure both the write and the reader are finished
