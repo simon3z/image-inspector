@@ -335,7 +335,7 @@ func (i *defaultImageInspector) createAndExtractImage(client *docker.Client, con
 	// (read waits until an EOF or error occurs).
 	handleTarStream(reader, i.opts.DstPath)
 
-	// capture any error from the copy, ensures both the handleTarStream and CopyFromContainer
+	// capture any error from the copy, ensures both the handleTarStream and DownloadFromContainer
 	// are done.
 	err = <-errorChannel
 	if err != nil {
