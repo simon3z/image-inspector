@@ -2,13 +2,13 @@ package inspector
 
 import (
 	"fmt"
+	docker "github.com/fsouza/go-dockerclient"
+	iiapi "github.com/openshift/image-inspector/pkg/api"
+	iicmd "github.com/openshift/image-inspector/pkg/cmd"
+	"github.com/openshift/image-inspector/pkg/openscap"
 	"io/ioutil"
 	"os"
 	"testing"
-
-	docker "github.com/fsouza/go-dockerclient"
-	iicmd "github.com/openshift/image-inspector/pkg/cmd"
-	"github.com/openshift/image-inspector/pkg/openscap"
 )
 
 type FailMockScanner struct{}
@@ -143,7 +143,7 @@ func TestGetAuthConfigs(t *testing.T) {
 	}
 
 	for k, v := range tests {
-		ii := &defaultImageInspector{*v.opts, InspectorMetadata{}}
+		ii := &defaultImageInspector{*v.opts, iiapi.InspectorMetadata{}, nil}
 		auths, err := ii.getAuthConfigs()
 		if !v.shouldFail {
 			if err != nil {
