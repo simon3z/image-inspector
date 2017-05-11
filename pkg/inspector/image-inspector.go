@@ -92,7 +92,6 @@ func NewDefaultImageInspector(opts iicmd.ImageInspectorOptions) ImageInspector {
 			APIVersions:       iiapi.APIVersions{Versions: []string{VERSION_TAG}},
 			MetadataURL:       METADATA_URL_PATH,
 			ContentURL:        CONTENT_URL_PREFIX,
-			ImageServeURL:     opts.DstPath,
 			ScanType:          opts.ScanType,
 			ScanReportURL:     OPENSCAP_URL_PATH,
 			HTMLScanReport:    opts.OpenScapHTML,
@@ -200,7 +199,7 @@ func (i *defaultImageInspector) Inspect() error {
 	}
 
 	if i.imageServer != nil {
-		return i.imageServer.ServeImage(&i.meta, scanResults, scanReport, htmlScanReport)
+		return i.imageServer.ServeImage(&i.meta, i.opts.DstPath, scanResults, scanReport, htmlScanReport)
 	}
 
 	return nil

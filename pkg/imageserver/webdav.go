@@ -43,15 +43,16 @@ func NewWebdavImageServer(opts ImageServerOptions, chroot bool) ImageServer {
 
 // ServeImage Serves the image.
 func (s *webdavImageServer) ServeImage(meta *iiapi.InspectorMetadata,
+	ImageServeURL string,
 	results iiapi.ScanResult,
 	scanReport []byte,
 	htmlScanReport []byte,
 ) error {
 
-	servePath := s.opts.ImageServeURL
+	servePath := ImageServeURL
 	if s.chroot {
-		if err := syscall.Chroot(s.opts.ImageServeURL); err != nil {
-			return fmt.Errorf("Unable to chroot into %s: %v\n", s.opts.ImageServeURL, err)
+		if err := syscall.Chroot(ImageServeURL); err != nil {
+			return fmt.Errorf("Unable to chroot into %s: %v\n", ImageServeURL, err)
 		}
 		servePath = CHROOT_SERVE_PATH
 	} else {
@@ -60,7 +61,7 @@ func (s *webdavImageServer) ServeImage(meta *iiapi.InspectorMetadata,
 		log.Printf("information of the hosting system.")
 	}
 
-	log.Printf("Serving image content %s on webdav://%s%s", s.opts.ImageServeURL, s.opts.ServePath, s.opts.ContentURL)
+	log.Printf("Serving image content %s on webdav://%s%s", ImageServeURL, s.opts.ServePath, s.opts.ContentURL)
 
 	http.Handle(s.opts.HealthzURL, s.checkAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok\n"))
