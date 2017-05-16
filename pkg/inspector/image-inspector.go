@@ -426,7 +426,7 @@ func (i *defaultImageInspector) getAuthConfigs() (*docker.AuthConfigurations, er
 	return imagePullAuths, nil
 }
 
-func (i *defaultImageInspector) scanImage(s openscap.Scanner) ([]byte, []byte, error) {
+func (i *defaultImageInspector) scanImage(s iiapi.Scanner) ([]byte, []byte, error) {
 	log.Printf("%s scanning %s. Placing results in %s",
 		s.ScannerName(), i.opts.DstPath, i.opts.ScanResultsDir)
 	var htmlScanReport []byte
