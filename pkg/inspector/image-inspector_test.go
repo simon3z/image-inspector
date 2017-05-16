@@ -2,13 +2,13 @@ package inspector
 
 import (
 	"fmt"
-	docker "github.com/fsouza/go-dockerclient"
-	iiapi "github.com/openshift/image-inspector/pkg/api"
-	iicmd "github.com/openshift/image-inspector/pkg/cmd"
-	"github.com/openshift/image-inspector/pkg/openscap"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	docker "github.com/fsouza/go-dockerclient"
+	iiapi "github.com/openshift/image-inspector/pkg/api"
+	iicmd "github.com/openshift/image-inspector/pkg/cmd"
 )
 
 type FailMockScanner struct{}
@@ -53,7 +53,7 @@ func TestScanImage(t *testing.T) {
 
 	for k, v := range map[string]struct {
 		ii         defaultImageInspector
-		s          openscap.Scanner
+		s          iiapi.Scanner
 		shouldFail bool
 	}{
 		"Scanner fails on scan":       {ii: defaultImageInspector{}, s: &FailMockScanner{}, shouldFail: true},

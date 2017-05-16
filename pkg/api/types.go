@@ -42,3 +42,15 @@ type APIVersions struct {
 	// Versions is the supported API versions
 	Versions []string `json:"versions"`
 }
+
+// Scanner interface that all scanners should define.
+type Scanner interface {
+	// Scan will scan the image
+	Scan(string, *docker.Image) error
+	// ScannerName is the scanner's name
+	ScannerName() string
+	// ResultFileName returns the name of the results file
+	ResultsFileName() string
+	// HtmlResultFileName returns the name of the results file
+	HTMLResultsFileName() string
+}

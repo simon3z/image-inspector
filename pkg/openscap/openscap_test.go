@@ -2,9 +2,12 @@ package openscap
 
 import (
 	"fmt"
-	docker "github.com/fsouza/go-dockerclient"
 	"strings"
 	"testing"
+
+	docker "github.com/fsouza/go-dockerclient"
+
+	iiapi "github.com/openshift/image-inspector/pkg/api"
 )
 
 func noRHELDist() (int, error) {
@@ -108,7 +111,7 @@ func TestScan(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		ts            Scanner
+		ts            iiapi.Scanner
 		shouldFail    bool
 		expectedError error
 	}{

@@ -12,7 +12,8 @@ import (
 	"syscall"
 
 	docker "github.com/fsouza/go-dockerclient"
-	util "github.com/openshift/image-inspector/pkg/util"
+	iiapi "github.com/openshift/image-inspector/pkg/api"
+	"github.com/openshift/image-inspector/pkg/util"
 )
 
 const (
@@ -69,8 +70,11 @@ type defaultOSCAPScanner struct {
 	HTML bool
 }
 
+// ensure interface is implemented
+var _ iiapi.Scanner = &defaultOSCAPScanner{}
+
 // NewDefaultScanner returns a new OpenSCAP scanner
-func NewDefaultScanner(cveDir, resultsDir, CVEUrlAltPath string, html bool) Scanner {
+func NewDefaultScanner(cveDir, resultsDir, CVEUrlAltPath string, html bool) iiapi.Scanner {
 	scanner := &defaultOSCAPScanner{
 		CVEDir:        cveDir,
 		ResultsDir:    resultsDir,
