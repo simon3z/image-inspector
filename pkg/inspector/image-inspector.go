@@ -163,30 +163,47 @@ func aggregateBytesAndReport(bytesChan chan int) {
 	}
 }
 
-// decodeDockerPullMessages will parse the docker pull messages received
-// from reader and will push the difference of bytes downloaded to
-// bytesChan. After reader is closed it will close bytesChan and exit.
-func decodeDockerPullMessages(bytesChan chan int, reader io.Reader) {
+// decodeDockerResponse will parse the docker pull messages received
+// from reader. It will start aggregateBytesAndReport with bytesChan
+// and will push the difference of bytes downloaded to bytesChan.
+// Errors encountered during parsing are reported to parsedErrors channel.
+// After reader is closed it will send nil on parsedErrors, close bytesChan and exit.
+func decodeDockerResponse(parsedErrors chan error, reader io.Reader) {
 	type progressDetailType struct {
 		Current, Total int
 	}
 	type pullMessage struct {
 		Status, Id     string
 		ProgressDetail progressDetailType
+		Error          string
 	}
+	bytesChan := make(chan int, 100)
 	defer func() { close(bytesChan) }()           // Closing the channel to end the other routine
 	layersBytesDownloaded := make(map[string]int) // bytes downloaded per layer
 	dec := json.NewDecoder(reader)                // decoder for the json messages
+
+	var startedDownloading = false
 	for {
 		var v pullMessage
 		if err := dec.Decode(&v); err != nil {
-			if err != io.ErrClosedPipe {
+			if err != io.ErrClosedPipe && err != io.EOF {
 				log.Printf("Error decoding json: %v", err)
+				parsedErrors <- fmt.Errorf("Error decoding json: %v", err)
+			} else {
+				parsedErrors <- nil
 			}
 			break
 		}
 		// decoding
+		if v.Error != "" {
+			parsedErrors <- fmt.Errorf(v.Error)
+			break
+		}
 		if v.Status == "Downloading" {
+			if !startedDownloading {
+				go aggregateBytesAndReport(bytesChan)
+				startedDownloading = true
+			}
 			bytes := v.ProgressDetail.Current
 			last, existed := layersBytesDownloaded[v.Id]
 			if !existed {
@@ -210,27 +227,33 @@ func (i *defaultImageInspector) pullImage(client *docker.Client) error {
 		return authCfgErr
 	}
 
-	reader, writer := io.Pipe()
-	// handle closing the reader/writer in the method that creates them
-	defer writer.Close()
-	defer reader.Close()
-	imagePullOption := docker.PullImageOptions{
-		Repository:    i.opts.Image,
-		OutputStream:  writer,
-		RawJSONStream: true,
-	}
-
-	bytesChan := make(chan int)
-	go aggregateBytesAndReport(bytesChan)
-	go decodeDockerPullMessages(bytesChan, reader)
-
 	// Try all the possible auth's from the config file
 	var authErr error
 	for name, auth := range imagePullAuths.Configs {
-		if authErr = client.PullImage(imagePullOption, auth); authErr == nil {
+		parsedErrors := make(chan error, 100)
+		defer func() { close(parsedErrors) }()
+
+		go func() {
+			reader, writer := io.Pipe()
+			defer writer.Close()
+			defer reader.Close()
+			imagePullOption := docker.PullImageOptions{
+				Repository:    i.opts.Image,
+				OutputStream:  writer,
+				RawJSONStream: true,
+			}
+			go decodeDockerResponse(parsedErrors, reader)
+
+			if err := client.PullImage(imagePullOption, auth); err != nil {
+				parsedErrors <- err
+			}
+		}()
+
+		if parsedError := <-parsedErrors; parsedError != nil {
+			log.Printf("Authentication with %s failed: %v", name, parsedError)
+		} else {
 			return nil
 		}
-		log.Printf("Authentication with %s failed: %v", name, authErr)
 	}
 	return fmt.Errorf("Unable to pull docker image: %v\n", authErr)
 }
