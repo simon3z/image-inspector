@@ -1,8 +1,9 @@
 package api
 
 import (
-	docker "github.com/fsouza/go-dockerclient"
 	"time"
+
+	docker "github.com/fsouza/go-dockerclient"
 )
 
 // OpenSCAPStatus is the status of openscap scan
@@ -13,6 +14,54 @@ const (
 	StatusSuccess      OpenSCAPStatus = "Success"
 	StatusError        OpenSCAPStatus = "Error"
 )
+
+// The default version for the result API object
+const APIVersion = "v1alpha"
+
+// ScanResult represents the compacted result of all scans performed on the image
+type ScanResult struct {
+	// APIVersion represents an API version for this result
+	APIVersion string `json:"apiVersion"`
+	// ImageName is a full pull spec of the input image
+	ImageName string `json:"imageName"`
+	// ImageIUD is a SHA256 identifier of the scanned image
+	ImageID string `json:"imageID"`
+	// Results contains compacted results of various scans performed on the image.
+	// Empty results means no problems were found with the given image.
+	Results []Result `json:"results,omitempty"`
+}
+
+// Result represents the compacted result of a single scan
+type Result struct {
+	// Name is the name of the scanner that produced this result
+	Name string `json:"name"`
+	// ScannerVersion is the scanner version
+	ScannerVersion string `json:"scannerVersion"`
+	// Timestamp is the exact time this scan was performed
+	Timestamp time.Time `json:"timestamp"`
+	// Reference contains URL to more details about the given result
+	Reference string `json:"reference"`
+	// Description describes the result in human readable form
+	Description string `json:"description,omitempty"`
+	// Summary contains a list of severities for the given result
+	Summary []Summary `json:"summary,omitempty"`
+}
+
+type Severity string
+
+var (
+	SeverityLow       Severity = "low"
+	SeverityModerate  Severity = "moderate"
+	SeverityImportant Severity = "important"
+	SeverityCritical  Severity = "critical"
+)
+
+// Summary represents a severy of a given result. The result can have multiple severieties
+// defined.
+type Summary struct {
+	// Label is the human readable severity (high, important, etc.)
+	Label Severity
+}
 
 type OpenSCAPMetadata struct {
 	Status           OpenSCAPStatus // Status of the OpenSCAP scan report
