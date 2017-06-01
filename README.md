@@ -25,7 +25,7 @@ Image Inspector can inspect images using OpenSCAP and serve the scan result.
 The OpenSCAP scan report will be served on <serve_path>/api/v1/openscap and
 the status of the scan will be available on <serve_path>/api/v1/metadata in
 the OpenSCAP section.  An HTML OpenSCAP scan report will be served on
-<serve_path>/api/v1/openscap-report if the --html option is used.
+<serve_path>/api/v1/openscap-report if the `--openscap-html-report` option is used.
 
     $ sudo ./image-inspector --image=fedora:22 --path=/tmp/image-content --scan-type=openscap
 			--serve 0.0.0.0:8080 --chroot
