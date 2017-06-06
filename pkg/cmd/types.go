@@ -10,6 +10,8 @@ import (
 	"os"
 )
 
+const DefaultDockerSocketLocation = "unix:///var/run/docker.sock"
+
 // MultiStringVar is implementing flag.Value
 type MultiStringVar struct {
 	Values []string
@@ -49,26 +51,25 @@ type ImageInspectorOptions struct {
 	// ScanResultsDir is the directory that will contain the results of the scan
 	ScanResultsDir string
 	// OpenScapHTML controls whether or not to generate an HTML report
+	// TODO: Move this into openscap plugin options.
 	OpenScapHTML bool
 	// CVEUrlPath An alternative source for the cve files
+	// TODO: Move this into openscap plugin options.
 	CVEUrlPath string
+	// PostResultURL represents an URL where the image-inspector should post the results of
+	// the scan.
+	PostResultURL string
+	// PostResultTokenFile if specified the content of the file will be added as a token to
+	// the result POST URL (eg. http://foo/?token=CONTENT.
+	PostResultTokenFile string
 }
 
 // NewDefaultImageInspectorOptions provides a new ImageInspectorOptions with default values.
 func NewDefaultImageInspectorOptions() *ImageInspectorOptions {
 	return &ImageInspectorOptions{
-		URI:            "unix:///var/run/docker.sock",
-		Image:          "",
-		DstPath:        "",
-		Serve:          "",
-		Chroot:         false,
-		DockerCfg:      MultiStringVar{[]string{}},
-		Username:       "",
-		PasswordFile:   "",
-		ScanType:       "",
-		ScanResultsDir: "",
-		OpenScapHTML:   false,
-		CVEUrlPath:     oscapscanner.CVEUrl,
+		URI:        DefaultDockerSocketLocation,
+		DockerCfg:  MultiStringVar{[]string{}},
+		CVEUrlPath: oscapscanner.CVEUrl,
 	}
 }
 

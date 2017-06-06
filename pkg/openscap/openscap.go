@@ -10,10 +10,12 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
 	iiapi "github.com/openshift/image-inspector/pkg/api"
 	"github.com/openshift/image-inspector/pkg/util"
+	xmldom "github.com/subchen/go-xmldom"
 )
 
 const (
@@ -29,6 +31,9 @@ const (
 	ImageShortIDLen = 11
 	Unknown         = "Unknown"
 	LinuxVersionPH  = "Unknown"
+	OpenSCAPVersion = "1.2"
+
+	CVEDetailsUrl = "https://cve.mitre.org/cgi-bin/cvename.cgi?name="
 )
 
 var (
@@ -219,4 +224,27 @@ func (s *defaultOSCAPScanner) ResultsFileName() string {
 
 func (s *defaultOSCAPScanner) HTMLResultsFileName() string {
 	return path.Join(s.ResultsDir, HTMLResultFile)
+}
+
+func ParseResults(report []byte) []iiapi.Result {
+	ret := []iiapi.Result{}
+	node := xmldom.Must(xmldom.ParseXML(string(report))).Root
+	for _, c := range node.Query("//rule-result") {
+		if !strings.Contains(c.GetChild("result").Text, "fail") {
+			continue
+		}
+		result := iiapi.Result{
+			Name:           "openscap",
+			ScannerVersion: OpenSCAPVersion,
+			Timestamp:      time.Now(),
+			Reference:      fmt.Sprintf("%s=%s", CVEDetailsUrl, strings.TrimSpace(c.GetChild("ident").Text)),
+		}
+		// If we have rule definition, we can provide more details
+		if ruleDef := node.QueryOne(fmt.Sprintf("//Benchmark//Rule[@id='%s']", c.GetAttribute("idref").Value)); ruleDef != nil {
+			result.Description = strings.TrimSpace(ruleDef.GetChild("title").Text)
+			result.Summary = []iiapi.Summary{{Label: iiapi.Severity(ruleDef.GetAttribute("severity").Value)}}
+		}
+		ret = append(ret, result)
+	}
+	return ret
 }

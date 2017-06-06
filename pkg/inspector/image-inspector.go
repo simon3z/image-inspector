@@ -1,6 +1,7 @@
 package inspector
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"math"
 	"math/big"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -26,6 +28,7 @@ import (
 )
 
 const (
+	// TODO: Make this const golang style
 	VERSION_TAG              = "v1"
 	DOCKER_TAR_PREFIX        = "rootfs/"
 	OWNER_PERM_RW            = 0600
@@ -119,6 +122,13 @@ func (i *defaultImageInspector) Inspect() error {
 	}
 	i.meta.Image = *imageMetadata
 
+	scanResults := iiapi.ScanResult{
+		APIVersion: iiapi.APIVersion,
+		ImageName:  i.opts.Image,
+		ImageID:    i.meta.Image.ID,
+		Results:    []iiapi.Result{},
+	}
+
 	var scanReport []byte
 	var htmlScanReport []byte
 	if i.opts.ScanType == "openscap" {
@@ -133,12 +143,52 @@ func (i *defaultImageInspector) Inspect() error {
 		} else {
 			i.meta.OpenSCAP.Status = iiapi.StatusSuccess
 		}
+		scanResults.Results = append(scanResults.Results, openscap.ParseResults(scanReport)...)
 	}
 
 	if i.imageServer != nil {
 		return i.imageServer.ServeImage(&i.meta,
 			scanReport, htmlScanReport)
 	}
+
+	if len(i.opts.PostResultURL) > 0 {
+		if err := i.postResults(scanResults); err != nil {
+			log.Printf("Error posting results: %v", err)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (i *defaultImageInspector) postTokenContent() string {
+	if len(i.opts.PostResultTokenFile) == 0 {
+		return ""
+	}
+	token, err := ioutil.ReadFile(i.opts.PostResultTokenFile)
+	if err != nil {
+		log.Printf("ERROR: Unable to read the %q token file: %v", i.opts.PostResultTokenFile, err)
+		return ""
+	}
+	return fmt.Sprintf("?token=%s", strings.TrimSpace(string(token)))
+}
+
+func (i *defaultImageInspector) postResults(scanResults iiapi.ScanResult) error {
+	url := i.opts.PostResultURL + i.postTokenContent()
+	log.Printf("Posting results to %q ...", url)
+	resultJSON, err := json.Marshal(scanResults)
+	if err != nil {
+		return err
+	}
+	client := http.Client{}
+	req, err := http.NewRequest("POST", url, bytes.NewReader(resultJSON))
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	log.Printf("DEBUG: Success: %v", resp)
 	return nil
 }
 
