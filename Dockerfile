@@ -1,9 +1,9 @@
 FROM centos:7
 MAINTAINER      Federico Simoncelli <fsimonce@redhat.com>
 
-RUN yum update -y && \
-    yum install -y golang openscap-scanner git && \
-    yum clean all
+RUN yum update -y --setopt=tsflags=nodocs && \
+    yum install -y --setopt=tsflags=nodocs golang openscap-scanner git && \
+    rm -rf /var/cache/yum
 
 COPY .  /go/src/github.com/openshift/image-inspector
 

@@ -17,6 +17,14 @@ all build:
 	hack/build-go.sh
 .PHONY: all build
 
+# Build image.
+#
+# Example:
+#   make image
+image:
+	hack/build-image.sh
+.PHONY: image
+
 # Remove all build artifacts.
 #
 # Example:

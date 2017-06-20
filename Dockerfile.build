@@ -1,0 +1,8 @@
+FROM golang:1.7
+MAINTAINER Federico Simoncelli <fsimonce@redhat.com>
+
+COPY .  /go/src/github.com/openshift/image-inspector
+
+RUN GOBIN=/usr/bin \
+    CGO_ENABLED=0 \
+    go install -a -installsuffix cgo /go/src/github.com/openshift/image-inspector/cmd/image-inspector.go
