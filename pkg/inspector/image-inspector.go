@@ -94,6 +94,7 @@ func NewDefaultImageInspector(opts iicmd.ImageInspectorOptions) ImageInspector {
 			ScanReportURL:     OPENSCAP_URL_PATH,
 			HTMLScanReport:    opts.OpenScapHTML,
 			HTMLScanReportURL: OPENSCAP_REPORT_URL_PATH,
+			AuthToken:         opts.AuthToken,
 		}
 		inspector.imageServer = apiserver.NewWebdavImageServer(imageServerOpts, opts.Chroot)
 	}

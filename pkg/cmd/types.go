@@ -62,6 +62,13 @@ type ImageInspectorOptions struct {
 	// PostResultTokenFile if specified the content of the file will be added as a token to
 	// the result POST URL (eg. http://foo/?token=CONTENT.
 	PostResultTokenFile string
+	// AuthToken is a Shared Secret used to validate HTTP Requests.
+	// AuthToken can be set through AuthTokenFile or ENV
+	AuthToken string
+
+	// AuthTokenFile is the path to a file containing the AuthToken
+	// If it is not provided, the AuthToken will be read from the ENV
+	AuthTokenFile string
 }
 
 // NewDefaultImageInspectorOptions provides a new ImageInspectorOptions with default values.
