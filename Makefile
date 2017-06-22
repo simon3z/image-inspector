@@ -7,7 +7,6 @@
 #   clean: Clean up.
 
 OUT_DIR = _output
-OUT_PKG_DIR = Godeps/_workspace/pkg
 
 # Build code.
 #
@@ -23,7 +22,7 @@ all build:
 # Example:
 #   make clean
 clean:
-	rm -rf $(OUT_DIR) $(OUT_PKG_DIR)
+	rm -rf $(OUT_DIR)
 .PHONY: clean
 
 # Verify code conventions are properly setup.
