@@ -16,6 +16,12 @@ const (
 	// CHROOT_SERVE_PATH is the path to server if we are performing a chroot
 	// this probably does not belong here.
 	CHROOT_SERVE_PATH = "/"
+	// AUTH_TOKEN_HEADER is the custom HTTP Header used
+	// to authenticate to image inspector.
+	// We use a custom auth header instead of Authorization
+	// because Kubernetes Proxy strips the default Auth Header
+	// from requests
+	AUTH_TOKEN_HEADER = "X-Auth-Token"
 )
 
 // webdavImageServer implements ImageServer.
@@ -54,29 +60,29 @@ func (s *webdavImageServer) ServeImage(meta *iiapi.InspectorMetadata,
 
 	log.Printf("Serving image content %s on webdav://%s%s", s.opts.ImageServeURL, s.opts.ServePath, s.opts.ContentURL)
 
-	http.HandleFunc(s.opts.HealthzURL, func(w http.ResponseWriter, r *http.Request) {
+	http.Handle(s.opts.HealthzURL, s.checkAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok\n"))
-	})
+	}))
 
-	http.HandleFunc(s.opts.APIURL, func(w http.ResponseWriter, r *http.Request) {
+	http.Handle(s.opts.APIURL, s.checkAuth(func(w http.ResponseWriter, r *http.Request) {
 		body, err := json.MarshalIndent(s.opts.APIVersions, "", "  ")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Write(body)
-	})
+	}))
 
-	http.HandleFunc(s.opts.MetadataURL, func(w http.ResponseWriter, r *http.Request) {
+	http.Handle(s.opts.MetadataURL, s.checkAuth(func(w http.ResponseWriter, r *http.Request) {
 		body, err := json.MarshalIndent(meta, "", "  ")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Write(body)
-	})
+	}))
 
-	http.HandleFunc(s.opts.ScanReportURL, func(w http.ResponseWriter, r *http.Request) {
+	http.Handle(s.opts.ScanReportURL, s.checkAuth(func(w http.ResponseWriter, r *http.Request) {
 		if s.opts.ScanType != "" && meta.OpenSCAP.Status == iiapi.StatusSuccess {
 			w.Write(scanReport)
 		} else {
@@ -87,9 +93,9 @@ func (s *webdavImageServer) ServeImage(meta *iiapi.InspectorMetadata,
 				http.Error(w, "OpenSCAP option was not chosen", http.StatusNotFound)
 			}
 		}
-	})
+	}))
 
-	http.HandleFunc(s.opts.HTMLScanReportURL, func(w http.ResponseWriter, r *http.Request) {
+	http.Handle(s.opts.HTMLScanReportURL, s.checkAuth(func(w http.ResponseWriter, r *http.Request) {
 		if s.opts.ScanType != "" && meta.OpenSCAP.Status == iiapi.StatusSuccess && s.opts.HTMLScanReport {
 			w.Write(htmlScanReport)
 		} else {
@@ -100,13 +106,43 @@ func (s *webdavImageServer) ServeImage(meta *iiapi.InspectorMetadata,
 				http.Error(w, "OpenSCAP option was not chosen", http.StatusNotFound)
 			}
 		}
-	})
+	}))
 
-	http.Handle(s.opts.ContentURL, &webdav.Handler{
+	http.Handle(s.opts.ContentURL, s.checkAuth((&webdav.Handler{
 		Prefix:     s.opts.ContentURL,
 		FileSystem: webdav.Dir(servePath),
 		LockSystem: webdav.NewMemLS(),
-	})
+	}).ServeHTTP))
 
 	return http.ListenAndServe(s.opts.ServePath, nil)
+}
+
+//middleware handler for checking auth
+func (s *webdavImageServer) checkAuth(next func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+	authToken := s.opts.AuthToken
+	// allow running without authorization
+	if len(authToken) == 0 {
+		log.Printf("!!!WARNING!!! It is insecure to serve the image content without setting")
+		log.Printf("an auth token. Please set INSPECTOR_AUTH_TOKEN in your environment.")
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next(w, req)
+		})
+	}
+
+	return func(w http.ResponseWriter, req *http.Request) {
+		if err := func() error {
+			token := req.Header.Get(AUTH_TOKEN_HEADER)
+			if len(token) == 0 {
+				return fmt.Errorf("must provide %s header with this request", AUTH_TOKEN_HEADER)
+			}
+			if token != authToken {
+				return fmt.Errorf("invalid auth token provided")
+			}
+			return nil
+		}(); err != nil {
+			http.Error(w, fmt.Sprintf("Authorization failed: %s", err.Error()), http.StatusUnauthorized)
+		} else {
+			next(w, req)
+		}
+	}
 }

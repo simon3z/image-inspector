@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 
 	iiapi "github.com/openshift/image-inspector/pkg/api"
 	iicmd "github.com/openshift/image-inspector/pkg/cmd"
@@ -27,8 +29,19 @@ func main() {
 	flag.StringVar(&inspectorOptions.CVEUrlPath, "cve-url", inspectorOptions.CVEUrlPath, "An alternative URL source for CVE files")
 	flag.StringVar(&inspectorOptions.PostResultURL, "post-results-url", inspectorOptions.PostResultURL, "After scan finish, HTTP POST the results to this URL")
 	flag.StringVar(&inspectorOptions.PostResultTokenFile, "post-results-token-file", inspectorOptions.PostResultTokenFile, "If specified, content of it will be added to the POST result URL (?token=....)")
+	flag.StringVar(&inspectorOptions.AuthTokenFile, "webdav-token-file", inspectorOptions.AuthTokenFile, "If specified, token used to authenticate to Image Inspector will be read from this file")
 
 	flag.Parse()
+
+	if inspectorOptions.AuthTokenFile != "" {
+		authToken, err := ioutil.ReadFile(inspectorOptions.AuthTokenFile)
+		if err != nil {
+			log.Fatalf("error reading auth token file: %v", err)
+		}
+		inspectorOptions.AuthToken = string(authToken)
+	} else {
+		inspectorOptions.AuthToken = os.Getenv("INSPECTOR_AUTH_TOKEN")
+	}
 
 	if err := inspectorOptions.Validate(); err != nil {
 		log.Fatal(err)
