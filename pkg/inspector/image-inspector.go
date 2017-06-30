@@ -165,7 +165,10 @@ func (i *defaultImageInspector) Inspect() error {
 		scanResults.Results = append(scanResults.Results, results...)
 
 	case "clamav":
-		scanner = clamav.NewScanner(i.opts.ClamSocket)
+		scanner, err = clamav.NewScanner(i.opts.ClamSocket)
+		if err != nil {
+			return fmt.Errorf("failed to initialize clamav scanner: %v", err)
+		}
 		results, _, err := scanner.Scan(i.opts.DstPath, &i.meta.Image)
 		if err != nil {
 			log.Printf("DEBUG: Unable to scan image %q with ClamAV: %v", i.opts.Image, err)

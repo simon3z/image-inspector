@@ -60,9 +60,7 @@ func TestScan(t *testing.T) {
 }
 
 func TestNewScanner(t *testing.T) {
-	scanner := NewScanner("missing.socket")
-	_, _, err := scanner.Scan(".", nil)
-	if err == nil {
+	if _, err := NewScanner("missing.socket"); err == nil {
 		t.Errorf("expected socket error, got none")
 	}
 }
