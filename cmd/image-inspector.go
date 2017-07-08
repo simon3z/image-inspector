@@ -31,6 +31,7 @@ func main() {
 	flag.StringVar(&inspectorOptions.PostResultURL, "post-results-url", inspectorOptions.PostResultURL, "After scan finish, HTTP POST the results to this URL")
 	flag.StringVar(&inspectorOptions.PostResultTokenFile, "post-results-token-file", inspectorOptions.PostResultTokenFile, "If specified, content of it will be added to the POST result URL (?token=....)")
 	flag.StringVar(&inspectorOptions.AuthTokenFile, "webdav-token-file", inspectorOptions.AuthTokenFile, "If specified, token used to authenticate to Image Inspector will be read from this file")
+	flag.StringVar(&inspectorOptions.PullPolicy, "pull-policy", inspectorOptions.PullPolicy, fmt.Sprintf("Pull policy, default is %s, options are: %v", iiapi.PullIfNotPresent, iiapi.PullPolicyOptions))
 
 	flag.Parse()
 

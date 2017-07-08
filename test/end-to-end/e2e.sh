@@ -21,6 +21,7 @@ ii::cmd::expect_failure_and_text "image-inspector --image=fedora:22 --dockercfg=
 ii::cmd::expect_failure_and_text "image-inspector --image=fedora:22 --dockercfg=badfile --username=foo" "Only specify dockercfg file or username/password pair for authentication"
 ii::cmd::expect_failure_and_text "image-inspector --image=fedora:22 --password-file=foo" "foo does not exist"
 ii::cmd::expect_failure_and_text "image-inspector --image=fedora:22 --scan-type=foo" "foo is not one of the available scan-type"
+ii::cmd::expect_failure_and_text "image-inspector --image=fedora:22 --pull-policy=foo" "foo is not one of the available pull-policy"
 
 
 # test extraction

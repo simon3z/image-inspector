@@ -124,8 +124,23 @@ func (i *defaultImageInspector) Inspect() error {
 		return fmt.Errorf("Unable to connect to docker daemon: %v\n", err)
 	}
 
-	if err = i.pullImage(client); err != nil {
-		return err
+	imageMetaBefore, inspectErrBefore := client.InspectImage(i.opts.Image)
+	if i.opts.PullPolicy == iiapi.PullNever && inspectErrBefore != nil {
+		return fmt.Errorf("Image %s is not available and pull-policy %s doesn't allow pulling",
+			i.opts.Image, i.opts.PullPolicy)
+	}
+
+	if i.opts.PullPolicy == iiapi.PullAlways ||
+		(i.opts.PullPolicy == iiapi.PullIfNotPresent && inspectErrBefore != nil) {
+		if err = i.pullImage(client); err != nil {
+			return err
+		}
+	}
+
+	imageMetaAfter, inspectErrAfter := client.InspectImage(i.opts.Image)
+	if inspectErrBefore == nil && inspectErrAfter == nil &&
+		imageMetaBefore.ID == imageMetaAfter.ID {
+		log.Printf("Image %s was already available", i.opts.Image)
 	}
 
 	randomName, err := generateRandomName()

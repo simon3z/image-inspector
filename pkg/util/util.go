@@ -13,3 +13,12 @@ func Min(x, y int) int {
 	}
 	return y
 }
+
+func StringInList(s string, l []string) bool {
+	for _, opt := range l {
+		if s == opt {
+			return true
+		}
+	}
+	return false
+}
