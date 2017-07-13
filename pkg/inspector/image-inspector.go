@@ -170,13 +170,11 @@ func (i *defaultImageInspector) Inspect() error {
 			log.Printf("DEBUG: Unable to scan image %q with OpenSCAP: %v", i.opts.Image, err)
 		} else {
 			i.meta.OpenSCAP.Status = iiapi.StatusSuccess
+			report := reportObj.(openscap.OpenSCAPReport)
+			scanReport = report.ArfBytes
+			htmlScanReport = report.HTMLBytes
+			scanResults.Results = append(scanResults.Results, results...)
 		}
-
-		report := reportObj.(openscap.OpenSCAPReport)
-		scanReport = report.ArfBytes
-		htmlScanReport = report.HTMLBytes
-
-		scanResults.Results = append(scanResults.Results, results...)
 
 	case "clamav":
 		scanner = clamav.NewScanner(i.opts.ClamSocket)
