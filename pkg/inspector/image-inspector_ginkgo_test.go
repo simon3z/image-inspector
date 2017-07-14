@@ -4,15 +4,16 @@ package inspector_test
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/fsouza/go-dockerclient"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	iicmd "github.com/openshift/image-inspector/pkg/cmd"
 	"github.com/openshift/image-inspector/pkg/imageserver"
 	. "github.com/openshift/image-inspector/pkg/inspector"
-	"net/http"
-	"strings"
-	"time"
 )
 
 var _ = Describe("ImageInspector", func() {

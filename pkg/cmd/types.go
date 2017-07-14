@@ -7,8 +7,9 @@ import (
 
 	iiapi "github.com/openshift/image-inspector/pkg/api"
 
-	util "github.com/openshift/image-inspector/pkg/util"
 	"os"
+
+	util "github.com/openshift/image-inspector/pkg/util"
 )
 
 const DefaultDockerSocketLocation = "unix:///var/run/docker.sock"
