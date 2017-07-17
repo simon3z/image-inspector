@@ -23,20 +23,20 @@ type ClamScanner struct {
 
 var _ api.Scanner = &ClamScanner{}
 
-func NewScanner(socket string) api.Scanner {
-	scanner := ClamScanner{
-		Socket: socket,
-	}
+func NewScanner(socket string) (api.Scanner, error) {
 	// TODO: Make the ignoreNegatives configurable
-	scanner.clamd, _ = clamav.NewClamdSession(scanner.Socket, true)
-	return &scanner
+	clamSession, err := clamav.NewClamdSession(socket, true)
+	if err != nil {
+		return nil, err
+	}
+	return &ClamScanner{
+		Socket: socket,
+		clamd: clamSession,
+	}, nil
 }
 
 // Scan will scan the image
 func (s *ClamScanner) Scan(path string, image *docker.Image) ([]api.Result, interface{}, error) {
-	if s.clamd == nil {
-		return nil, nil, fmt.Errorf("unable to start clamd session")
-	}
 	scanResults := []api.Result{}
 	// Useful for debugging
 	scanStarted := time.Now()
