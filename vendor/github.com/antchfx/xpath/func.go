@@ -2,6 +2,7 @@ package xpath
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -53,21 +54,37 @@ func lastFunc(q query, t iterator) interface{} {
 
 // countFunc is a XPath Node Set functions count(node-set).
 func countFunc(q query, t iterator) interface{} {
-	var (
-		count = 0
-		node  = t.Current()
-	)
-	node.MoveToFirst()
+	var count = 0
 	test := predicate(q)
-	for {
-		if test(node) {
-			count++
-		}
-		if !node.MoveToNext() {
-			break
+	switch typ := q.Evaluate(t).(type) {
+	case query:
+		for node := typ.Select(t); node != nil; node = typ.Select(t) {
+			if test(node) {
+				count++
+			}
 		}
 	}
 	return float64(count)
+}
+
+// sumFunc is a XPath Node Set functions sum(node-set).
+func sumFunc(q query, t iterator) interface{} {
+	var sum float64
+	switch typ := q.Evaluate(t).(type) {
+	case query:
+		for node := typ.Select(t); node != nil; node = typ.Select(t) {
+			if v, err := strconv.ParseFloat(node.Value(), 64); err == nil {
+				sum += v
+			}
+		}
+	case float64:
+		sum = typ
+	case string:
+		if v, err := strconv.ParseFloat(typ, 64); err != nil {
+			sum = v
+		}
+	}
+	return sum
 }
 
 // nameFunc is a XPath functions name([node-set]).
@@ -212,5 +229,26 @@ func notFunc(q query, t iterator) interface{} {
 		return node == nil
 	default:
 		return false
+	}
+}
+
+// concatFunc is the concat function concatenates two or more
+// strings and returns the resulting string.
+// concat( string1 , string2 [, stringn]* )
+func concatFunc(args ...query) func(query, iterator) interface{} {
+	return func(q query, t iterator) interface{} {
+		var a []string
+		for _, v := range args {
+			switch v := v.Evaluate(t).(type) {
+			case string:
+				a = append(a, v)
+			case query:
+				node := v.Select(t)
+				if node != nil {
+					a = append(a, node.Value())
+				}
+			}
+		}
+		return strings.Join(a, "")
 	}
 }
