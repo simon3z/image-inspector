@@ -69,6 +69,9 @@ func (s *webdavImageServer) GetHandler(meta *iiapi.InspectorMetadata,
 		if err := syscall.Chroot(ImageServeURL); err != nil {
 			return nil, fmt.Errorf("Unable to chroot into %s: %v\n", ImageServeURL, err)
 		}
+		if err := syscall.Chdir("/"); err != nil {
+			return nil, fmt.Errorf("Unable to change directory into new root: %v\n", err)
+		}
 		servePath = chrootServePath
 	} else {
 		log.Printf("!!!WARNING!!! It is insecure to serve the image content without changing")
