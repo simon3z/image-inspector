@@ -1,15 +1,13 @@
-xpath
+XPath
 ====
 [![GoDoc](https://godoc.org/github.com/antchfx/xpath?status.svg)](https://godoc.org/github.com/antchfx/xpath)
 [![Coverage Status](https://coveralls.io/repos/github/antchfx/xpath/badge.svg?branch=master)](https://coveralls.io/github/antchfx/xpath?branch=master)
 [![Build Status](https://travis-ci.org/antchfx/xpath.svg?branch=master)](https://travis-ci.org/antchfx/xpath)
 [![Go Report Card](https://goreportcard.com/badge/github.com/antchfx/xpath)](https://goreportcard.com/report/github.com/antchfx/xpath)
 
-xpath is XPath package for Golang, support most of XPath features(syntax).
+XPath is Go package provides selecting nodes from XML, HTML or other documents using XPath expression.
 
-xquery
-===
-[xquery](https://github.com/antchfx/xquery) package lets you extract data from HTML/XML documents using XPath, written in golang.
+[XQuery](https://github.com/antchfx/xquery) : lets you extract data from HTML/XML documents using XPath package.
 
 ### Features
 
@@ -105,15 +103,16 @@ xquery
 
     * position()
     * last()
-    * count(node-set)
+    * count( node-set )
     * name()
-    * starts-with(string,string)
-    * normalize-space(string)
-    * substring(string,start[,length])
-    * not(expression)
-    * string-length([string])
-    * contains(string,string)
-    * come more
+    * starts-with( string, string )
+    * normalize-space( string )
+    * substring( string , start [, length] )
+    * not( expression )
+    * string-length( [string] )
+    * contains( string, string )
+    * sum( node-set )
+    * concat( string1 , string2 [, stringn]* )
 
 - `a or b` : Boolean or.
 

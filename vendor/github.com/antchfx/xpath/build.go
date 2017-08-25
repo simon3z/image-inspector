@@ -224,9 +224,9 @@ func (b *builder) processFunctionNode(root *functionNode) (query, error) {
 	case "position":
 		qyOutput = &functionQuery{Input: b.firstInput, Func: positionFunc}
 	case "count":
-		if b.firstInput == nil {
-			return nil, errors.New("xpath: expression must evaluate to node-set")
-		}
+		//if b.firstInput == nil {
+		//	return nil, errors.New("xpath: expression must evaluate to node-set")
+		//}
 		if len(root.Args) == 0 {
 			return nil, fmt.Errorf("xpath: count(node-sets) function must with have parameters node-sets")
 		}
@@ -235,6 +235,28 @@ func (b *builder) processFunctionNode(root *functionNode) (query, error) {
 			return nil, err
 		}
 		qyOutput = &functionQuery{Input: argQuery, Func: countFunc}
+	case "sum":
+		if len(root.Args) == 0 {
+			return nil, fmt.Errorf("xpath: sum(node-sets) function must with have parameters node-sets")
+		}
+		argQuery, err := b.processNode(root.Args[0])
+		if err != nil {
+			return nil, err
+		}
+		qyOutput = &functionQuery{Input: argQuery, Func: sumFunc}
+	case "concat":
+		if len(root.Args) < 2 {
+			return nil, fmt.Errorf("xpath: concat() must have at least two arguments")
+		}
+		var args []query
+		for _, v := range root.Args {
+			q, err := b.processNode(v)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, q)
+		}
+		qyOutput = &functionQuery{Input: b.firstInput, Func: concatFunc(args...)}
 	default:
 		return nil, fmt.Errorf("not yet support this function %s()", root.FuncName)
 	}
@@ -318,7 +340,19 @@ func (b *builder) processNode(root node) (q query, err error) {
 }
 
 // build builds a specified XPath expressions expr.
-func build(expr string) (query, error) {
+func build(expr string) (q query, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			switch x := e.(type) {
+			case string:
+				err = errors.New(x)
+			case error:
+				err = x
+			default:
+				err = errors.New("unknown panic")
+			}
+		}
+	}()
 	root := parse(expr)
 	b := &builder{}
 	return b.processNode(root)

@@ -1,11 +1,9 @@
 FROM centos:7
-MAINTAINER Federico Simoncelli <fsimonce@redhat.com>
+MAINTAINER      Federico Simoncelli <fsimonce@redhat.com>
 
 RUN yum update -y && \
-    yum install -y golang openscap-scanner && \
+    yum install -y golang openscap-scanner git && \
     yum clean all
-
-WORKDIR /var/lib/image-inspector
 
 COPY .  /go/src/github.com/openshift/image-inspector
 
