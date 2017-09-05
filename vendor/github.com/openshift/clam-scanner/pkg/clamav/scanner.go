@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/golang/glog"
+	"golang.org/x/net/context"
 )
 
 // ClamScanner is the interface for a scanner.
@@ -41,7 +42,7 @@ func (scanner *clamScanner) Scan() ([]byte, error) {
 		return nil, err
 	}
 
-	err = ses.ScanPath(scanner.path)
+	err = ses.ScanPath(context.Background(), scanner.path, nil)
 	if err != nil {
 		ses.Close()
 		return nil, err

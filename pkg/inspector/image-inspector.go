@@ -2,6 +2,7 @@ package inspector
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -124,6 +125,8 @@ func (i *defaultImageInspector) Inspect() error {
 		return fmt.Errorf("Unable to connect to docker daemon: %v\n", err)
 	}
 
+	ctx := context.Background()
+
 	imageMetaBefore, inspectErrBefore := client.InspectImage(i.opts.Image)
 	if i.opts.PullPolicy == iiapi.PullNever && inspectErrBefore != nil {
 		return fmt.Errorf("Image %s is not available and pull-policy %s doesn't allow pulling",
@@ -165,7 +168,7 @@ func (i *defaultImageInspector) Inspect() error {
 			reportObj interface{}
 		)
 		scanner = openscap.NewDefaultScanner(OSCAP_CVE_DIR, i.opts.ScanResultsDir, i.opts.CVEUrlPath, i.opts.OpenScapHTML)
-		results, reportObj, err = scanner.Scan(i.opts.DstPath, &i.meta.Image)
+		results, reportObj, err = scanner.Scan(ctx, i.opts.DstPath, &i.meta.Image)
 		if err != nil {
 			i.meta.OpenSCAP.SetError(err)
 			log.Printf("DEBUG: Unable to scan image %q with OpenSCAP: %v", i.opts.Image, err)
@@ -182,7 +185,7 @@ func (i *defaultImageInspector) Inspect() error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize clamav scanner: %v", err)
 		}
-		results, _, err := scanner.Scan(i.opts.DstPath, &i.meta.Image)
+		results, _, err := scanner.Scan(ctx, i.opts.DstPath, &i.meta.Image)
 		if err != nil {
 			log.Printf("DEBUG: Unable to scan image %q with ClamAV: %v", i.opts.Image, err)
 			return err

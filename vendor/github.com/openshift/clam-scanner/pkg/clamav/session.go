@@ -13,12 +13,16 @@ import (
 	"syscall"
 
 	"github.com/golang/glog"
+	"golang.org/x/net/context"
 )
+
+type FilterFiles map[string]struct{}
 
 // ClamdSession is the interface for a Clamav session.
 type ClamdSession interface {
-	// ScanPath scans all files under the specified path.
-	ScanPath(path string) error
+	// ScanPath scans all files under the specified path. The context object
+	// can be used to cancel the scan.
+	ScanPath(ctx context.Context, path string, filter FilterFiles) error
 
 	// WaitTillDone blocks until responses have been received for all the
 	// files submitted for scanning.
@@ -120,7 +124,7 @@ func NewClamdSession(socket string, ignoreNegatives bool) (ClamdSession, error) 
 	closeChan := make(chan bool)
 	requestIDToFilename := make(map[int]string)
 
-	ses := &clamdSession{
+	s := &clamdSession{
 		closeChan:                closeChan,
 		conn:                     conn,
 		requestIDToFilename:      requestIDToFilename,
@@ -131,30 +135,30 @@ func NewClamdSession(socket string, ignoreNegatives bool) (ClamdSession, error) 
 		},
 	}
 
-	go ses.pollResponses()
+	go s.pollResponses()
 
-	return ses, nil
+	return s, nil
 }
 
 // Close ends the session with clamd and closes the connection.
-func (ses *clamdSession) Close() error {
-	err := ses.conn.Write([]byte("zEND\000"), nil)
+func (s *clamdSession) Close() error {
+	err := s.conn.Write([]byte("zEND\000"), nil)
 	if err != nil {
-		ses.conn.Close()
+		s.conn.Close()
 		return err
 	}
 
-	return ses.conn.Close()
+	return s.conn.Close()
 }
 
 // WaitTillDone waits for all responses for each file submitted to clamd to be
 // received.  It should be called only after all files have been submitted.
-func (ses *clamdSession) WaitTillDone() {
-	ses.allFilesSubmitted = true
+func (s *clamdSession) WaitTillDone() {
+	s.allFilesSubmitted = true
 
 	for {
 		select {
-		case <-ses.closeChan:
+		case <-s.closeChan:
 			return
 		default:
 		}
@@ -162,28 +166,28 @@ func (ses *clamdSession) WaitTillDone() {
 }
 
 // GetResults returns the scan results.
-func (ses *clamdSession) GetResults() ClamdScanResult {
-	return ses.results
+func (s *clamdSession) GetResults() ClamdScanResult {
+	return s.results
 }
 
 // pollResponses polls clamd for responses, reads them, and handles them.  It
 // closes closeChan and returns once all files have been submitted and all
 // responses received, or when the connection to clamd is closed.
-func (ses *clamdSession) pollResponses() {
-	defer close(ses.closeChan)
+func (s *clamdSession) pollResponses() {
+	defer close(s.closeChan)
 
 	for {
-		if ses.allFilesSubmitted && ses.numFilesSubmitted == ses.numResponsesReceived {
+		if s.allFilesSubmitted && s.numFilesSubmitted == s.numResponsesReceived {
 			return
 		}
 
-		buf, err := ses.conn.Read()
+		buf, err := s.conn.Read()
 		if err != nil {
 			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 				continue
 			}
 
-			ses.log(err)
+			s.log(err)
 
 			if err == io.EOF {
 				return
@@ -192,20 +196,20 @@ func (ses *clamdSession) pollResponses() {
 			continue
 		}
 
-		ses.handleResponses(buf)
+		s.handleResponses(buf)
 	}
 }
 
 // handleResponses takes a buffer that may contain 1 or more responses from
 // clamd and handles those responses individually.
-func (ses *clamdSession) handleResponses(buf []byte) {
-	buf = append(ses.partialResponse, buf...)
-	ses.partialResponse = nil
+func (s *clamdSession) handleResponses(buf []byte) {
+	buf = append(s.partialResponse, buf...)
+	s.partialResponse = nil
 
 	for {
 		end := bytes.IndexByte(buf, '\x00')
 		if end <= 0 {
-			ses.partialResponse = buf
+			s.partialResponse = buf
 			return
 		}
 
@@ -214,12 +218,12 @@ func (ses *clamdSession) handleResponses(buf []byte) {
 
 		glog.V(6).Infof("Parsed response:\n  %#v\nremaining buffer:\n  %#v\n", response, string(buf))
 
-		ses.handleResponse(response)
+		s.handleResponse(response)
 	}
 }
 
 // handleResponse takes a response that was received from clamd and handles it.
-func (ses *clamdSession) handleResponse(response string) {
+func (s *clamdSession) handleResponse(response string) {
 	errors := []string{}
 
 	requestID, requestResult, err := parseClamdResponse(response)
@@ -231,14 +235,14 @@ func (ses *clamdSession) handleResponse(response string) {
 	if requestID != 0 {
 		var ok bool
 
-		ses.requestIDToFilenameMutex.Lock()
-		path, ok = ses.requestIDToFilename[requestID]
-		ses.requestIDToFilenameMutex.Unlock()
+		s.requestIDToFilenameMutex.Lock()
+		path, ok = s.requestIDToFilename[requestID]
+		s.requestIDToFilenameMutex.Unlock()
 		if !ok {
 			errors = append(errors, fmt.Sprintf("request not recognized: %d", requestID))
 		}
 
-		ses.numResponsesReceived++
+		s.numResponsesReceived++
 	}
 
 	result := ClamdFileResult{
@@ -248,10 +252,10 @@ func (ses *clamdSession) handleResponse(response string) {
 	}
 
 	glog.V(6).Infof("Received scan result for request %d out of %d submitted:\n  %#v\n",
-		requestID, ses.numFilesSubmitted, result)
+		requestID, s.numFilesSubmitted, result)
 
-	if !ses.ignoreNegatives || !result.IsNegative() {
-		ses.results.Files = append(ses.results.Files, result)
+	if !s.ignoreNegatives || !result.IsNegative() {
+		s.results.Files = append(s.results.Files, result)
 	}
 }
 
@@ -280,40 +284,50 @@ func parseClamdResponse(response string) (int, string, error) {
 }
 
 // log appends an error to the scan results.
-func (ses *clamdSession) log(err error) {
-	ses.results.Errors = append(ses.results.Errors, err.Error())
+func (s *clamdSession) log(err error) {
+	s.results.Errors = append(s.results.Errors, err.Error())
 }
 
 // ScanPath performs a scan on a path by walking the path and submitting files
 // to clamd.  Recoverable errors are added to the scan result.  In the case of a
 // non-recoverable error, an error is returned instead.
-func (ses *clamdSession) ScanPath(path string) error {
+func (s *clamdSession) ScanPath(ctx context.Context, rootPath string, filter FilterFiles) error {
 	walkFn := func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
-			ses.log(err)
+			s.log(err)
 			return nil
 		}
 
-		if fileInfo.Mode().IsRegular() {
-			err := ses.scanFile(path)
-			if err != nil {
-				ses.log(err)
+		if ctx != nil {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
 			}
+		}
+
+		if filter != nil {
+			if _, ok := filter[path]; !ok {
+				return nil
+			}
+		}
+
+		if !fileInfo.Mode().IsRegular() {
+			return nil
+		}
+
+		if err := s.scanFile(path); err != nil {
+			s.log(err)
 		}
 
 		return nil
 	}
 
-	err := filepath.Walk(path, walkFn)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return filepath.Walk(rootPath, walkFn)
 }
 
 // scanFile submits a file to clamd for scanning.
-func (ses *clamdSession) scanFile(path string) error {
+func (s *clamdSession) scanFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -323,15 +337,15 @@ func (ses *clamdSession) scanFile(path string) error {
 	rights := syscall.UnixRights(int(f.Fd()))
 	msg := []byte("zFILDES\000\000")
 
-	err = ses.conn.Write(msg, rights)
+	err = s.conn.Write(msg, rights)
 	if err != nil {
 		return err
 	}
 
-	ses.numFilesSubmitted++
-	ses.requestIDToFilenameMutex.Lock()
-	ses.requestIDToFilename[ses.numFilesSubmitted] = path
-	ses.requestIDToFilenameMutex.Unlock()
+	s.numFilesSubmitted++
+	s.requestIDToFilenameMutex.Lock()
+	s.requestIDToFilename[s.numFilesSubmitted] = path
+	s.requestIDToFilenameMutex.Unlock()
 
 	return nil
 }

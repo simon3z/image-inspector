@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"time"
 
 	docker "github.com/fsouza/go-dockerclient"
@@ -106,8 +107,8 @@ type APIVersions struct {
 type Scanner interface {
 	// Scan will perform a scan on the given path for the given Image.
 	// It should return compacted results for JSON serialization and additionally scanner
-	// specific results with more details.
-	Scan(path string, image *docker.Image) ([]Result, interface{}, error)
+	// specific results with more details. The context object can be used to cancel the scanning process.
+	Scan(ctx context.Context, path string, image *docker.Image) ([]Result, interface{}, error)
 
 	// Name is the scanner's name
 	Name() string

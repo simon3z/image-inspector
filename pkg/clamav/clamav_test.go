@@ -3,18 +3,23 @@ package clamav
 import (
 	"testing"
 
+	"golang.org/x/net/context"
 	"github.com/openshift/clam-scanner/pkg/clamav"
 )
 
 type fakeClamSession struct {
 	t                  *testing.T
+	ctx                context.Context
 	path               string
+	filter             clamav.FilterFiles
 	waitTillDoneCalled bool
 	closeCalled        bool
 }
 
-func (f *fakeClamSession) ScanPath(path string) error {
+func (f *fakeClamSession) ScanPath(ctx context.Context, path string, filter clamav.FilterFiles) error {
+	f.ctx = ctx
 	f.path = path
+	f.filter = filter
 	return nil
 }
 func (f *fakeClamSession) WaitTillDone() {
@@ -34,9 +39,10 @@ func (f *fakeClamSession) GetResults() clamav.ClamdScanResult {
 }
 
 func TestScan(t *testing.T) {
+	ctx := context.Background()
 	scanner := &ClamScanner{clamd: &fakeClamSession{t: t}}
 
-	results, _, err := scanner.Scan("/foo/bar", nil)
+	results, _, err := scanner.Scan(ctx, "/foo/bar", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
