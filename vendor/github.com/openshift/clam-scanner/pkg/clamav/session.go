@@ -16,7 +16,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-type FilterFiles map[string]struct{}
+type FilterFiles func(string, os.FileInfo) bool
 
 // ClamdSession is the interface for a Clamav session.
 type ClamdSession interface {
@@ -307,12 +307,12 @@ func (s *clamdSession) ScanPath(ctx context.Context, rootPath string, filter Fil
 		}
 
 		if filter != nil {
-			if _, ok := filter[path]; !ok {
-				return nil
+			if !filter(path, fileInfo) {
+				return filepath.SkipDir
 			}
 		}
 
-		if !fileInfo.Mode().IsRegular() {
+		if path == rootPath || !fileInfo.Mode().IsRegular() {
 			return nil
 		}
 
