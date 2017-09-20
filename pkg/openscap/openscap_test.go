@@ -1,6 +1,7 @@
 package openscap
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -10,11 +11,11 @@ import (
 	iiapi "github.com/openshift/image-inspector/pkg/api"
 )
 
-func noRHELDist() (int, error) {
+func noRHELDist(context.Context) (int, error) {
 	return 0, fmt.Errorf("could not find RHEL dist")
 }
 
-func rhel7Dist() (int, error) {
+func rhel7Dist(context.Context) (int, error) {
 	return 7, nil
 }
 
@@ -25,19 +26,19 @@ func inputCVEMock(int) (string, error) {
 	return "cve_file", nil
 }
 
-func unableToChroot(...string) ([]byte, error) {
+func unableToChroot(context.Context, ...string) ([]byte, error) {
 	return []byte(""), fmt.Errorf("can't chroot")
 }
 
-func okChrootOscap(...string) ([]byte, error) {
+func okChrootOscap(context.Context, ...string) ([]byte, error) {
 	return []byte(""), nil
 }
 
-func rhel3OscapChroot(args ...string) ([]byte, error) {
+func rhel3OscapChroot(ctx context.Context, args ...string) ([]byte, error) {
 	return []byte("oval:org.open-scap.cpe.rhel:def:3: true"), nil
 }
 
-func rhel7OscapChroot(args ...string) ([]byte, error) {
+func rhel7OscapChroot(ctx context.Context, args ...string) ([]byte, error) {
 	if strings.Contains(args[3], "7") {
 		return []byte("oval:org.open-scap.cpe.rhel:def:7: true"), nil
 	}
@@ -45,12 +46,13 @@ func rhel7OscapChroot(args ...string) ([]byte, error) {
 }
 
 func TestGetRhelDist(t *testing.T) {
+	ctx := context.Background()
 
 	tsRhel7ItIs := &defaultOSCAPScanner{chrootOscap: rhel7OscapChroot}
 	tsRhel3Always := &defaultOSCAPScanner{chrootOscap: rhel3OscapChroot}
 	noDistErr := fmt.Errorf("could not find RHEL dist")
 	tsCantChroot := &defaultOSCAPScanner{chrootOscap: unableToChroot}
-	_, cantChrootErr := unableToChroot()
+	_, cantChrootErr := unableToChroot(ctx)
 
 	tests := map[string]struct {
 		ts            *defaultOSCAPScanner
@@ -76,7 +78,7 @@ func TestGetRhelDist(t *testing.T) {
 	}
 
 	for k, v := range tests {
-		dist, err := v.ts.getRHELDist()
+		dist, err := v.ts.getRHELDist(ctx)
 		if v.shouldFail && !strings.Contains(err.Error(), v.expectedError.Error()) {
 			t.Errorf("%s expected  to cause error:\n%v\nBut got:\n%v", k, v.expectedError, err)
 		}
@@ -91,8 +93,10 @@ func TestGetRhelDist(t *testing.T) {
 }
 
 func TestScan(t *testing.T) {
+	ctx := context.Background()
+
 	tsNoRhelDist := &defaultOSCAPScanner{rhelDist: noRHELDist}
-	_, noRhelDistErr := noRHELDist()
+	_, noRhelDistErr := noRHELDist(ctx)
 
 	tsNoInputCVE := &defaultOSCAPScanner{rhelDist: rhel7Dist, inputCVE: noInputCVE}
 	_, noInputCVEErr := noInputCVE(0)
@@ -102,7 +106,7 @@ func TestScan(t *testing.T) {
 		inputCVE:    inputCVEMock,
 		chrootOscap: unableToChroot,
 	}
-	_, cantChrootErr := unableToChroot()
+	_, cantChrootErr := unableToChroot(ctx)
 
 	tsSuccessMocks := &defaultOSCAPScanner{
 		rhelDist:    rhel7Dist,
@@ -156,7 +160,7 @@ func TestScan(t *testing.T) {
 	}
 
 	for k, v := range tests {
-		_, report, err := v.ts.Scan(".", &docker.Image{})
+		_, report, err := v.ts.Scan(ctx, ".", &docker.Image{})
 		if v.shouldFail && !strings.Contains(err.Error(), v.expectedError.Error()) {
 			t.Errorf("%s expected to cause error:\n%v\nBut got:\n%v", k, v.expectedError, err)
 		}
@@ -178,7 +182,7 @@ func TestScan(t *testing.T) {
 		"mount path is not a directory": {"openscap.go", &docker.Image{}},
 		"image is nil":                  {".", nil},
 	} {
-		if _, _, err := tsSuccessMocks.Scan(v.mountPath, v.image); err == nil {
+		if _, _, err := tsSuccessMocks.Scan(ctx, v.mountPath, v.image); err == nil {
 			t.Errorf("%s did not fail", k)
 		}
 	}

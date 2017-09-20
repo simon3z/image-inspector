@@ -1,6 +1,7 @@
 package openscap
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -44,13 +45,13 @@ var (
 )
 
 // rhelDistFunc provides an injectable way to get the rhel dist for testing.
-type rhelDistFunc func() (int, error)
+type rhelDistFunc func(context.Context) (int, error)
 
 // inputCVEFunc provides an injectable way to get the cve file for testing.
 type inputCVEFunc func(int) (string, error)
 
 // chrootOscapFunc provides an injectable way to chroot and execute oscap for testing.
-type chrootOscapFunc func(...string) ([]byte, error)
+type chrootOscapFunc func(context.Context, ...string) ([]byte, error)
 
 // setEnvFunc provides an injectable way to get the cve file for testing.
 type setEnvFunc func() error
@@ -106,9 +107,9 @@ func NewDefaultScanner(cveDir, resultsDir, CVEUrlAltPath string, html bool) iiap
 	return scanner
 }
 
-func (s *defaultOSCAPScanner) getRHELDist() (int, error) {
+func (s *defaultOSCAPScanner) getRHELDist(ctx context.Context) (int, error) {
 	for _, dist := range RHELDistNumbers {
-		output, err := s.chrootOscap("oval", "eval", "--id",
+		output, err := s.chrootOscap(ctx, "oval", "eval", "--id",
 			fmt.Sprintf("%s%d", CPE, dist), CPEDict)
 		if err != nil {
 			return 0, err
@@ -169,11 +170,11 @@ func (s *defaultOSCAPScanner) setOscapChrootEnv() error {
 }
 
 // Wrapper function for executing oscap
-func (s *defaultOSCAPScanner) oscapChroot(oscapArgs ...string) ([]byte, error) {
+func (s *defaultOSCAPScanner) oscapChroot(ctx context.Context, oscapArgs ...string) ([]byte, error) {
 	if err := s.setEnv(); err != nil {
 		return nil, fmt.Errorf("Unable to set env variables in oscapChroot: %v", err)
 	}
-	cmd := exec.Command("oscap", oscapArgs...)
+	cmd := exec.CommandContext(ctx, "oscap", oscapArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
@@ -190,7 +191,7 @@ func (s *defaultOSCAPScanner) oscapChroot(oscapArgs ...string) ([]byte, error) {
 	return out, err
 }
 
-func (s *defaultOSCAPScanner) Scan(mountPath string, image *docker.Image) ([]iiapi.Result, interface{}, error) {
+func (s *defaultOSCAPScanner) Scan(ctx context.Context, mountPath string, image *docker.Image) ([]iiapi.Result, interface{}, error) {
 	fi, err := os.Stat(mountPath)
 	if err != nil || os.IsNotExist(err) || !fi.IsDir() {
 		return nil, nil, fmt.Errorf("%s is not a directory, error: %v", mountPath, err)
@@ -201,7 +202,7 @@ func (s *defaultOSCAPScanner) Scan(mountPath string, image *docker.Image) ([]iia
 	s.image = image
 	s.imageMountPath = mountPath
 
-	rhelDist, err := s.rhelDist()
+	rhelDist, err := s.rhelDist(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Unable to get RHEL distribution number: %v\n", err)
 	}
@@ -220,7 +221,7 @@ func (s *defaultOSCAPScanner) Scan(mountPath string, image *docker.Image) ([]iia
 
 	args = append(args, cveFileName)
 
-	_, err = s.chrootOscap(args...)
+	_, err = s.chrootOscap(ctx, args...)
 	if err != nil {
 		return nil, nil, err
 	}
