@@ -42,7 +42,7 @@ func TestScan(t *testing.T) {
 	ctx := context.Background()
 	scanner := &ClamScanner{clamd: &fakeClamSession{t: t}}
 
-	results, _, err := scanner.Scan(ctx, "/foo/bar", nil)
+	results, _, err := scanner.Scan(ctx, "/foo/bar", nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

@@ -191,7 +191,7 @@ func (s *defaultOSCAPScanner) oscapChroot(ctx context.Context, oscapArgs ...stri
 	return out, err
 }
 
-func (s *defaultOSCAPScanner) Scan(ctx context.Context, mountPath string, image *docker.Image) ([]iiapi.Result, interface{}, error) {
+func (s *defaultOSCAPScanner) Scan(ctx context.Context, mountPath string, image *docker.Image, filter iiapi.FilesFilter) ([]iiapi.Result, interface{}, error) {
 	fi, err := os.Stat(mountPath)
 	if err != nil || os.IsNotExist(err) || !fi.IsDir() {
 		return nil, nil, fmt.Errorf("%s is not a directory, error: %v", mountPath, err)

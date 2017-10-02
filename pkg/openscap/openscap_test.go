@@ -160,7 +160,7 @@ func TestScan(t *testing.T) {
 	}
 
 	for k, v := range tests {
-		_, report, err := v.ts.Scan(ctx, ".", &docker.Image{})
+		_, report, err := v.ts.Scan(ctx, ".", &docker.Image{}, nil)
 		if v.shouldFail && !strings.Contains(err.Error(), v.expectedError.Error()) {
 			t.Errorf("%s expected to cause error:\n%v\nBut got:\n%v", k, v.expectedError, err)
 		}
@@ -182,7 +182,7 @@ func TestScan(t *testing.T) {
 		"mount path is not a directory": {"openscap.go", &docker.Image{}},
 		"image is nil":                  {".", nil},
 	} {
-		if _, _, err := tsSuccessMocks.Scan(ctx, v.mountPath, v.image); err == nil {
+		if _, _, err := tsSuccessMocks.Scan(ctx, v.mountPath, v.image, nil); err == nil {
 			t.Errorf("%s did not fail", k)
 		}
 	}

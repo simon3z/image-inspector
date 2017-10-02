@@ -71,6 +71,10 @@ func TestValidate(t *testing.T) {
 	noSuchPullPolicy.Image = "image"
 	noSuchPullPolicy.PullPolicy = "whatisdocker?"
 
+	conflictOptions := NewDefaultImageInspectorOptions()
+	conflictOptions.Image = "image"
+	conflictOptions.Container = "container"
+
 	tests := map[string]struct {
 		inspector      *ImageInspectorOptions
 		shouldValidate bool
@@ -90,6 +94,7 @@ func TestValidate(t *testing.T) {
 		"bad config with html and no scan":    {inspector: badScanOptionsHTMLnoScan, shouldValidate: false},
 		"bad config with html and wrong scan": {inspector: badScanOptionsHTMLWrongScan, shouldValidate: false},
 		"no such pull policy available":       {inspector: noSuchPullPolicy, shouldValidate: false},
+		"conflict options":                    {inspector: conflictOptions, shouldValidate: false},
 	}
 
 	for k, v := range tests {
