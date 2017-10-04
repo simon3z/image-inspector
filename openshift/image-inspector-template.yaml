@@ -1,0 +1,99 @@
+apiVersion: "v1"
+kind: "Template"
+metadata:
+  name: "image-inspector-scan"
+  annotations:
+    description:
+      Template for scanning a container image. Requires privileged permissions.
+    tags: infrastructure
+objects:
+- apiVersion: "v1"
+  kind: "Pod"
+  metadata:
+    name: "${NAME}"
+    labels:
+      name: "${NAME}"
+    annotations:
+      openshift.io/scc: "privileged"
+      openshift.io/image-scan-target: "${TARGET_IMAGE}"
+  spec:
+    containers:
+    - name: "image-inspector"
+      image: "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+      imagePullPolicy: "Always"
+      command:
+      - "/usr/bin/image-inspector"
+      - "--chroot"
+      - "--username=${SERVICE_ACCOUNT}"
+      - "--password-file=${TOKEN_FILE}"
+      - "--image=${TARGET_IMAGE}"
+      - "--scan-type=openscap"
+      - "--cve-url=${CVE_URL}"
+      - "--openscap-html-report"
+      - "--serve=:8080"
+      ports:
+      - containerPort: 8080
+        protocol: "TCP"
+      volumeMounts:
+      - name: "docker-socket"
+        mountPath: "${DOCKER_SOCKET}"
+      securityContext:
+        privileged: true
+      readinessProbe:
+        httpGet:
+          path: "/healthz"
+          port: 8080
+        initialDelaySeconds: 15
+        periodSeconds: 5
+    nodeSelector: "${{NODE_SELECTOR}}"
+    automountServiceAccountToken: true
+    serviceAccountName: "${SERVICE_ACCOUNT}"
+    restartPolicy: "Never"
+    volumes:
+    - name: "docker-socket"
+      hostPath:
+        path: "${DOCKER_SOCKET}"
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: "${NAME}"
+  spec:
+    ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      name: "${NAME}"
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: "${NAME}"
+  spec:
+    port:
+      targetPort: http
+    to:
+      kind: Service
+      name: "${NAME}"
+parameters:
+- name: NAME
+  generate: expression
+  from: "image-scan-[a-z0-9]{5}"
+- name: IMAGE_REGISTRY
+  value: "openshift"
+- name: IMAGE_NAME
+  value: "image-inspector"
+- name: IMAGE_TAG
+  value: "2.1"
+- name: TARGET_IMAGE
+  value: "registry.access.redhat.com/rhel7"
+- name: CVE_URL
+  value: "https://www.redhat.com/security/data/metrics/ds"
+- name: DOCKER_SOCKET
+  value: "/var/run/docker.sock"
+- name: SERVICE_ACCOUNT
+  value: "inspector-admin"
+- name: TOKEN_FILE
+  value: "/run/secrets/kubernetes.io/serviceaccount/token"
+- name: NODE_SELECTOR
+  value: "{}"
